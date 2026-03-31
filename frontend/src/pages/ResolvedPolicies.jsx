@@ -1,0 +1,1 @@
+export { ResolvedPolicies as default } from './AllPolicies.jsx';

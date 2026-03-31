@@ -1,0 +1,1 @@
+export { PendingPolicies as default } from './AllPolicies.jsx';
