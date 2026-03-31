@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { login } from "../lib/api.js";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -6,17 +7,7 @@ export default function Login() {
 
   const handleLogin = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ username, password })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error);
+      const data = await login({ username, password });
 
       // ✅ STORE EVERYTHING HERE (CORRECT PLACE)
       localStorage.setItem("token", data.token);

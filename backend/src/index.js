@@ -5,14 +5,12 @@ import authRoutes from "./routes/auth.js";
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import dumpsRouter   from './routes/dumps.js';
 import policiesRouter from './routes/policies.js';
 import statsRouter   from './routes/stats.js';
 import { errorHandler, notFound } from './middleware/errors.js';
 import exportRoutes from "./routes/export.js";
 import { authMiddleware } from "./middleware/auth.js";
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { exportExcel } from "../lib/api.js";
+import { useToast } from "./Toast.jsx";
 
 const FIELD_LABELS = {
   policy_no: "Policy Number",
@@ -29,6 +31,7 @@ const EXTRA_FIELDS = [
 ];
 
 export default function ExportModal({ dumps = [], onClose }) {
+  const toast = useToast();
   const [selectedFields, setSelectedFields] = useState([]);
   const [selectedDumps, setSelectedDumps] = useState([]);
 
@@ -45,26 +48,22 @@ export default function ExportModal({ dumps = [], onClose }) {
   };
 
   const handleExport = async () => {
-    const res = await fetch("/api/export/excel", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
+    try {
+      const blob = await exportExcel({
         fields: selectedFields,
         dumpIds: selectedDumps
-      })
-    });
+      });
+      const url = window.URL.createObjectURL(blob);
 
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "export.xlsx";
+      a.click();
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "export.xlsx";
-    a.click();
-
-    onClose(); // auto close
+      onClose();
+    } catch (err) {
+      toast(err.message, "error");
+    }
   };
 
   return (
