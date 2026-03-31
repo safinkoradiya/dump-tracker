@@ -1,15 +1,21 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../db/pool.js";
-
 import { query } from "../db/pool.js";
+import { authMiddleware, requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
-// ✅ REGISTER USER
-router.post("/register", async (req, res) => {
+
+function normalizeRole(role) {
+  return role === "admin" ? "admin" : "viewer";
+}
+
+// Only admins can create users in production.
+router.post("/register", authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { username, password, role } = req.body;
 
@@ -17,16 +23,16 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Missing fields" });
     }
 
-    // 🔐 hash password
     const hash = await bcrypt.hash(password, 10);
+    const userId = randomUUID();
+    const userRole = normalizeRole(role);
 
     const result = await pool.query(
-      "INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id, username, role",
-      [username, hash, role || "viewer"]
+      "INSERT INTO users (id, username, password, role) VALUES ($1, $2, $3, $4) RETURNING id, username, role",
+      [userId, username, hash, userRole]
     );
 
-    res.json(result.rows[0]);
-
+    res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
 
@@ -37,8 +43,13 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
 
   const result = await query(
     "SELECT * FROM users WHERE username = $1",
@@ -64,11 +75,10 @@ router.post("/login", async (req, res) => {
   );
 
   res.json({
-  token,
-  role: user.role,
-  username: user.username
+    token,
+    role: user.role,
+    username: user.username
+  });
 });
-});
-
 
 export default router;
