@@ -6,6 +6,16 @@ const migrate = async () => {
   console.log('Running migrations...');
 
   await query(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT DEFAULT 'viewer',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+`);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS dumps (
       id            TEXT PRIMARY KEY,
       company       TEXT NOT NULL,
@@ -15,6 +25,7 @@ const migrate = async () => {
       updated_at    TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+   
 
   await query(`
     CREATE TABLE IF NOT EXISTS policies (
@@ -70,3 +81,4 @@ migrate().catch((err) => {
   console.error('Migration failed:', err);
   process.exit(1);
 });
+

@@ -2,7 +2,14 @@ const BASE = import.meta.env.VITE_API_URL || '';
 
 async function req(method, path, body, file) {
   const url = `${BASE}/api${path}`;
-  const opts = { method, headers: {} };
+  const token = localStorage.getItem("token"); // ✅ ADD THIS
+
+  const opts = {
+    method,
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }) // ✅ ADD THIS
+    }
+  };
 
   if (file) {
     const fd = new FormData();
@@ -16,7 +23,13 @@ async function req(method, path, body, file) {
 
   const res = await fetch(url, opts);
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  if (res.status === 401) {
+  localStorage.clear();
+  window.location.href = "/login";
+  return;
+}
+
+if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
   return json;
 }
 

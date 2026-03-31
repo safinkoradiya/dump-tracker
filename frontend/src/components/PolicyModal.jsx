@@ -3,6 +3,8 @@ import { updatePolicy } from '../lib/api.js';
 import { fmtDate, daysPending } from '../lib/utils.js';
 import { DaysBadge, BucketBadge } from './UI.jsx';
 import { useToast } from './Toast.jsx';
+const role = localStorage.getItem("role");
+const isViewer = role === "viewer";
 
 export default function PolicyModal({ policy, onClose, onSaved }) {
   const toast = useToast();
@@ -100,27 +102,27 @@ export default function PolicyModal({ policy, onClose, onSaved }) {
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">RM Name</label>
-                <input className="form-control" value={form.rm_name} onChange={e => set('rm_name', e.target.value)} />
+                <input disabled={isViewer} className="form-control" value={form.rm_name} onChange={e => set('rm_name', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">IMD Name</label>
-                <input className="form-control" value={form.imd_name} onChange={e => set('imd_name', e.target.value)} />
+                <input disabled={isViewer} className="form-control" value={form.imd_name} onChange={e => set('imd_name', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Recv. Date (IMD)</label>
-                <input className="form-control" type="date" value={form.recv_date} onChange={e => set('recv_date', e.target.value)} />
+                <input disabled={isViewer} className="form-control" type="date" value={form.recv_date} onChange={e => set('recv_date', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Date Given to RM</label>
-                <input className="form-control" type="date" value={form.given_date} onChange={e => set('given_date', e.target.value)} />
+                <input disabled={isViewer} className="form-control" type="date" value={form.given_date} onChange={e => set('given_date', e.target.value)} />
               </div>
               <div className="form-group full">
                 <label className="form-label">RM Response / QC Remarks</label>
-                <textarea className="form-control" rows={3} value={form.rm_response} onChange={e => set('rm_response', e.target.value)} />
+                <textarea disabled={isViewer} className="form-control" rows={3} value={form.rm_response} onChange={e => set('rm_response', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Pending With <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(manual)</span></label>
-                <input className="form-control" placeholder="e.g. RM, Company, Customer, IMD…" value={form.pending_side} onChange={e => set('pending_side', e.target.value)} />
+                <input disabled={isViewer} className="form-control" placeholder="e.g. RM, Company, Customer, IMD…" value={form.pending_side} onChange={e => set('pending_side', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Days Pending</label>
@@ -132,21 +134,21 @@ export default function PolicyModal({ policy, onClose, onSaved }) {
               </div>
               <div className="form-group">
                 <label className="form-label">RM Resolved</label>
-                <select className="form-control" value={form.rm_resolved ? '1' : '0'} onChange={e => set('rm_resolved', e.target.value === '1')}>
+                <select disabled={isViewer} className="form-control" value={form.rm_resolved ? '1' : '0'} onChange={e => set('rm_resolved', e.target.value === '1')}>
                   <option value="0">No</option>
                   <option value="1">Yes</option>
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Company Resolved</label>
-                <select className="form-control" value={form.company_resolved ? '1' : '0'} onChange={e => set('company_resolved', e.target.value === '1')}>
+                <select disabled={isViewer} className="form-control" value={form.company_resolved ? '1' : '0'} onChange={e => set('company_resolved', e.target.value === '1')}>
                   <option value="0">No</option>
                   <option value="1">Yes</option>
                 </select>
               </div>
               <div className="form-group full">
                 <label className="form-label">Remarks</label>
-                <textarea className="form-control" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+                <textarea disabled={isViewer} className="form-control" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
               </div>
             </div>
           </div>
@@ -161,7 +163,14 @@ export default function PolicyModal({ policy, onClose, onSaved }) {
 
         <div className="modal-footer">
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
+         <button
+  className="btn primary"
+  onClick={save}
+  disabled={saving || isViewer}
+  title={isViewer ? "Read-only access" : ""}
+>
+  {saving ? 'Saving…' : 'Save Changes'}
+</button>
         </div>
       </div>
     </div>

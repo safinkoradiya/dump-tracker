@@ -3,7 +3,7 @@ import multer from 'multer';
 import XLSX from 'xlsx';
 import { query } from '../db/pool.js';
 import { nextPolicyId, ensureSequences } from '../db/sequences.js';
-
+import { authMiddleware, requireAdmin } from "../middleware/auth.js";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -172,7 +172,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // POST /api/policies/import — Excel/CSV bulk import linked to a dump
-router.post('/import', upload.single('file'), async (req, res) => {
+router.post("/import", authMiddleware, requireAdmin, async (req, res) => {
   await ensureSequences();
   const { dump_id } = req.body;
   if (!dump_id)    return res.status(400).json({ error: 'dump_id is required' });

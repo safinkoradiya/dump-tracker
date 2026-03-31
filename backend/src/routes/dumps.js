@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { nextDumpId, ensureSequences } from '../db/sequences.js';
+import { authMiddleware, requireAdmin } from "../middleware/auth.js";
+
 
 const router = Router();
 
@@ -58,7 +60,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/dumps — create a new dump
-router.post('/', async (req, res) => {
+router.post("/", authMiddleware, requireAdmin, async (req, res) => {
   await ensureSequences();
   const { company, upload_date, remarks } = req.body;
   if (!company) return res.status(400).json({ error: 'company is required' });
@@ -74,7 +76,7 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH /api/dumps/:id — update dump details
-router.patch('/:id', async (req, res) => {
+router.patch("/:id", authMiddleware, requireAdmin, async (req, res) => {
   const { company, upload_date, remarks } = req.body;
   const result = await query(`
     UPDATE dumps SET
@@ -89,10 +91,11 @@ router.patch('/:id', async (req, res) => {
 });
 
 // DELETE /api/dumps/:id — cascades to policies
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", authMiddleware, requireAdmin, async (req, res) => {
   const result = await query('DELETE FROM dumps WHERE id=$1 RETURNING id', [req.params.id]);
   if (!result.rows.length) return res.status(404).json({ error: 'Dump not found' });
   res.json({ message: 'Deleted', id: req.params.id });
 });
+
 
 export default router;

@@ -6,6 +6,7 @@ import { useApi } from '../hooks/useApi.js';
 import { StatCard, StatusBadge, ProgressBar, Loading, ErrorMsg, EmptyState } from '../components/UI.jsx';
 import NewDumpModal from '../components/NewDumpModal.jsx';
 import ExportModal from "../components/ExportModal";
+ 
 
 export default function AllDumps() {
   const navigate = useNavigate();
@@ -29,6 +30,8 @@ export default function AllDumps() {
   const handleCreated = () => dumps.reload();
 
   const s = stats.data || {};
+  const role = localStorage.getItem("role");
+  const isViewer = role === "viewer";
 
   return (
     <>
@@ -38,12 +41,23 @@ export default function AllDumps() {
           <div className="page-desc">Track all uploaded insurance policy dump batches</div>
         </div>
         <div className="header-actions">
-          <button className="btn primary" onClick={() => setShowNew(true)}>+ Upload Dump</button>
-
+          <button
+  className="btn primary"
+  onClick={() => setShowNew(true)}
+  disabled={isViewer}
+  title={isViewer ? "Read-only access" : ""}
+>
+  + Upload Dump
+</button>
           {/* ✅ ADD THIS BUTTON */}
-          <button className="btn" onClick={() => setShowExport(true)}>
-            Export
-          </button>
+          <button
+  className="btn"
+  onClick={() => setShowExport(true)}
+  disabled={isViewer}
+  title={isViewer ? "Read-only access" : ""}
+>
+  Export
+</button>
 
         </div>
       </div>

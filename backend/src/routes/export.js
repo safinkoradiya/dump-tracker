@@ -1,10 +1,11 @@
 import express from "express";
 import ExcelJS from "exceljs";
 import pool from "../db/pool.js";
+import { authMiddleware, requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.post("/excel", async (req, res) => {
+router.post("/excel", authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { fields = [], dumpIds = [] } = req.body;
 

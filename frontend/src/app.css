@@ -308,3 +308,80 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   margin-bottom: 6px;
   color: #ccc;
 }
+/* LOGIN PAGE */
+.login-page {
+  display: flex;
+  height: 100vh;
+  font-family: sans-serif;
+}
+
+/* LEFT SIDE */
+.login-left {
+  flex: 1;
+  background: #0f172a;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+}
+
+.login-left h1 {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+.login-left p {
+  color: #94a3b8;
+}
+
+/* RIGHT SIDE */
+.login-right {
+  flex: 1;
+  background: #020617;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* CARD */
+.login-card {
+  background: #111827;
+  padding: 40px;
+  border-radius: 16px;
+  width: 320px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.login-card h2 {
+  color: white;
+  margin-bottom: 20px;
+}
+
+/* INPUT */
+.login-card input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+  background: #1f2937;
+  color: white;
+}
+
+/* BUTTON */
+.login-card button {
+  width: 100%;
+  padding: 10px;
+  background: #2563eb;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.login-card button:hover {
+  background: #1d4ed8;
+}
