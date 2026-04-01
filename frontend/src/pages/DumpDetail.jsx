@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getDump, getPolicies, importFile, createPolicy } from '../lib/api.js';
+import { deleteDump, getDump, getPolicies, importFile } from '../lib/api.js';
 import { fmtDate } from '../lib/utils.js';
 import { useApi } from '../hooks/useApi.js';
 import { StatCard, ProgressBar, Loading, ErrorMsg } from '../components/UI.jsx';
@@ -15,6 +15,8 @@ export default function DumpDetail() {
   const [rmFilter, setRmFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const fileRef = { current: null };
+  const role = localStorage.getItem("role");
+  const isViewer = role === "viewer";
 
   const dump   = useApi(() => getDump(id), [id]);
   const polsRes = useApi(() => getPolicies({ dump_id: id, limit: 500 }), [id]);
@@ -44,10 +46,21 @@ export default function DumpDetail() {
   };
 
   const handleUpdated = () => { polsRes.reload(); dump.reload(); };
+  const handleDeleteDump = async () => {
+    if (!window.confirm(`Delete dump ${id}? All active and deleted policies under it will be removed.`)) return;
+    try {
+      await deleteDump(id);
+      toast(`Dump ${id} deleted`);
+      navigate('/');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
 
   const d = dump.data;
   const total    = d?.total_policies ?? allPolicies.length;
   const resolved = d?.resolved_count ?? allPolicies.filter(p => p.rm_resolved && p.company_resolved).length;
+  const deleted  = d?.deleted_policies ?? 0;
 
   return (
     <>
@@ -66,6 +79,11 @@ export default function DumpDetail() {
             Import Excel
             <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileImport} />
           </label>
+          {!isViewer && (
+            <button className="btn danger" onClick={handleDeleteDump}>
+              Delete Dump
+            </button>
+          )}
         </div>
       </div>
 
@@ -73,6 +91,7 @@ export default function DumpDetail() {
         <StatCard label="Total Policies" value={total}        variant="accent" />
         <StatCard label="Resolved"       value={resolved}     variant="green" />
         <StatCard label="Pending"        value={total - resolved} variant="amber" />
+        <StatCard label="Deleted Policies" value={deleted} variant="red" />
         <div className="stat-card">
           <div className="stat-label">Progress</div>
           <div className="stat-value" style={{ fontSize: 20 }}>{total > 0 ? Math.round(resolved/total*100) : 0}%</div>

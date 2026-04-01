@@ -5,9 +5,16 @@ import PolicyModal from './PolicyModal.jsx';
 
 export default function PoliciesTable({ policies = [], onUpdated }) {
   const [selected, setSelected] = useState(null);
+  const role = localStorage.getItem("role");
+  const isViewer = role === "viewer";
 
   const handleSaved = (updated) => {
     if (onUpdated) onUpdated(updated);
+  };
+
+  const handleDeleted = () => {
+    setSelected(null);
+    if (onUpdated) onUpdated();
   };
 
   if (!policies.length) return <EmptyState text="No policies found" hint="Adjust filters or upload a dump" />;
@@ -30,6 +37,7 @@ export default function PoliciesTable({ policies = [], onUpdated }) {
               <th>RM ✓</th>
               <th>Co. ✓</th>
               <th>Status</th>
+              {!isViewer && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -52,6 +60,13 @@ export default function PoliciesTable({ policies = [], onUpdated }) {
                   <td><CheckBadge value={p.rm_resolved} /></td>
                   <td><CheckBadge value={p.company_resolved} /></td>
                   <td><StatusBadge status={status} /></td>
+                  {!isViewer && (
+                    <td onClick={e => e.stopPropagation()}>
+                      <button className="btn sm danger" onClick={() => setSelected(p)}>
+                        Delete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -64,6 +79,7 @@ export default function PoliciesTable({ policies = [], onUpdated }) {
           policy={selected}
           onClose={() => setSelected(null)}
           onSaved={handleSaved}
+          onDeleted={handleDeleted}
         />
       )}
     </>

@@ -13,6 +13,7 @@ router.get('/', async (req, res) => {
         COUNT(*) FILTER (WHERE rm_resolved AND company_resolved)::int AS resolved,
         COUNT(*) FILTER (WHERE NOT (rm_resolved AND company_resolved))::int AS pending
       FROM policies
+      WHERE deleted_at IS NULL
     `)
   ]);
 
@@ -28,17 +29,20 @@ router.get('/buckets', async (req, res) => {
   const result = await query(`
     SELECT
       COUNT(*) FILTER (
-        WHERE NOT (rm_resolved AND company_resolved)
+        WHERE deleted_at IS NULL
+          AND NOT (rm_resolved AND company_resolved)
           AND recv_date IS NOT NULL
           AND CURRENT_DATE - recv_date::date < 3
       )::int AS hot,
       COUNT(*) FILTER (
-        WHERE NOT (rm_resolved AND company_resolved)
+        WHERE deleted_at IS NULL
+          AND NOT (rm_resolved AND company_resolved)
           AND recv_date IS NOT NULL
           AND CURRENT_DATE - recv_date::date BETWEEN 3 AND 15
       )::int AS warm,
       COUNT(*) FILTER (
-        WHERE NOT (rm_resolved AND company_resolved)
+        WHERE deleted_at IS NULL
+          AND NOT (rm_resolved AND company_resolved)
           AND recv_date IS NOT NULL
           AND CURRENT_DATE - recv_date::date > 15
       )::int AS cold
@@ -57,7 +61,8 @@ router.get('/rm', async (req, res) => {
       COUNT(*) FILTER (WHERE rm_resolved AND company_resolved)::int AS fully_resolved,
       COUNT(*) FILTER (WHERE NOT (rm_resolved AND company_resolved))::int AS pending
     FROM policies
-    WHERE rm_name <> ''
+    WHERE deleted_at IS NULL
+      AND rm_name <> ''
     GROUP BY rm_name
     ORDER BY total DESC
   `);

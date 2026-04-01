@@ -47,6 +47,7 @@ router.get('/', async (req, res) => {
   }
   if (status === 'Resolved') where.push(`(p.rm_resolved AND p.company_resolved)`);
   if (status === 'Pending')  where.push(`NOT (p.rm_resolved AND p.company_resolved)`);
+  where.push(`p.deleted_at IS NULL`);
 
   const whereSQL = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
@@ -97,7 +98,7 @@ router.get('/', async (req, res) => {
 // GET /api/policies/:id
 router.get('/:id', async (req, res) => {
   const result = await query(
-    `SELECT p.*, d.company FROM policies p JOIN dumps d ON d.id = p.dump_id WHERE p.id = $1`,
+    `SELECT p.*, d.company FROM policies p JOIN dumps d ON d.id = p.dump_id WHERE p.id = $1 AND p.deleted_at IS NULL`,
     [req.params.id]
   );
   if (!result.rows.length) return res.status(404).json({ error: 'Policy not found' });
@@ -156,6 +157,7 @@ router.patch('/:id', async (req, res) => {
       remarks          = COALESCE($8,  remarks),
       pending_side     = COALESCE($9,  pending_side)
     WHERE id = $10
+      AND deleted_at IS NULL
     RETURNING *
   `, [rm_name, imd_name, given_date || null, recv_date || null,
       rm_response, rm_resolved, company_resolved, remarks, pending_side, req.params.id]);
@@ -237,6 +239,19 @@ router.post("/import", authMiddleware, requireAdmin, upload.single('file'), asyn
   }
 
   res.status(201).json({ message: `Imported ${inserted} policies into ${dump_id}`, count: inserted });
+});
+
+router.delete('/:id', authMiddleware, requireAdmin, async (req, res) => {
+  const result = await query(`
+    UPDATE policies
+    SET deleted_at = NOW()
+    WHERE id = $1
+      AND deleted_at IS NULL
+    RETURNING id, policy_no, dump_id
+  `, [req.params.id]);
+
+  if (!result.rows.length) return res.status(404).json({ error: 'Policy not found' });
+  res.json({ message: 'Policy deleted', data: result.rows[0] });
 });
 
 export default router;

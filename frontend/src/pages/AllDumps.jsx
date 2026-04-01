@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDumps, getStats } from '../lib/api.js';
+import { deleteDump, getDumps, getStats } from '../lib/api.js';
 import { fmtDate, getDumpStatus, progressColor } from '../lib/utils.js';
 import { useApi } from '../hooks/useApi.js';
 import { StatCard, StatusBadge, ProgressBar, Loading, ErrorMsg, EmptyState } from '../components/UI.jsx';
 import NewDumpModal from '../components/NewDumpModal.jsx';
 import ExportModal from "../components/ExportModal";
+import { useToast } from '../components/Toast.jsx';
  
 
 export default function AllDumps() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [showNew, setShowNew] = useState(false);
 
   // ✅ ADD THIS
@@ -28,6 +30,16 @@ export default function AllDumps() {
   });
 
   const handleCreated = () => dumps.reload();
+  const handleDeleteDump = async (dumpId) => {
+    if (!window.confirm(`Delete dump ${dumpId}? All policies in it will also be deleted.`)) return;
+    try {
+      await deleteDump(dumpId);
+      toast(`Dump ${dumpId} deleted`);
+      await Promise.all([dumps.reload(), stats.reload()]);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
 
   const s = stats.data || {};
   const role = localStorage.getItem("role");
@@ -98,8 +110,10 @@ export default function AllDumps() {
                         <th>Company</th>
                         <th>Upload Date</th>
                         <th>Total Policies</th>
+                        <th>Deleted Policies</th>
                         <th>Status</th>
                         <th>Progress</th>
+                        {!isViewer && <th>Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -111,6 +125,7 @@ export default function AllDumps() {
                             <td><strong>{d.company}</strong></td>
                             <td>{fmtDate(d.upload_date)}</td>
                             <td className="mono">{d.total_policies}</td>
+                            <td className="mono">{d.deleted_policies ?? 0}</td>
                             <td><StatusBadge status={d.status} /></td>
                             <td style={{ minWidth: 180 }}>
                               <ProgressBar resolved={d.resolved_count} total={d.total_policies} />
@@ -118,6 +133,13 @@ export default function AllDumps() {
                                 {d.resolved_count}/{d.total_policies} resolved
                               </div>
                             </td>
+                            {!isViewer && (
+                              <td onClick={e => e.stopPropagation()}>
+                                <button className="btn sm danger" onClick={() => handleDeleteDump(d.id)}>
+                                  Delete
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}

@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { updatePolicy } from '../lib/api.js';
+import { updatePolicy, deletePolicy } from '../lib/api.js';
 import { fmtDate, daysPending } from '../lib/utils.js';
 import { DaysBadge, BucketBadge } from './UI.jsx';
 import { useToast } from './Toast.jsx';
-const role = localStorage.getItem("role");
-const isViewer = role === "viewer";
 
-export default function PolicyModal({ policy, onClose, onSaved }) {
+export default function PolicyModal({ policy, onClose, onSaved, onDeleted }) {
   const toast = useToast();
+  const role = localStorage.getItem("role");
+  const isViewer = role === "viewer";
   const [form, setForm] = useState({
     rm_name:          policy.rm_name || '',
     imd_name:         policy.imd_name || '',
@@ -20,6 +20,7 @@ export default function PolicyModal({ policy, onClose, onSaved }) {
     pending_side:     policy.pending_side || '',
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -34,6 +35,21 @@ export default function PolicyModal({ policy, onClose, onSaved }) {
       toast(e.message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm(`Delete policy ${policy.policy_no}? This will hide it from active dump tracking.`)) return;
+    setDeleting(true);
+    try {
+      await deletePolicy(policy.id);
+      toast('Policy deleted');
+      if (onDeleted) onDeleted(policy.id);
+      onClose();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -162,11 +178,16 @@ export default function PolicyModal({ policy, onClose, onSaved }) {
         </div>
 
         <div className="modal-footer">
+          {!isViewer && (
+            <button className="btn danger" onClick={remove} disabled={saving || deleting}>
+              {deleting ? 'Deleting…' : 'Delete Policy'}
+            </button>
+          )}
           <button className="btn" onClick={onClose}>Cancel</button>
          <button
   className="btn primary"
   onClick={save}
-  disabled={saving || isViewer}
+  disabled={saving || deleting || isViewer}
   title={isViewer ? "Read-only access" : ""}
 >
   {saving ? 'Saving…' : 'Save Changes'}

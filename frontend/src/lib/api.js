@@ -84,6 +84,7 @@ export const getPolicies   = (params = {}) => req('GET', '/policies?' + new URLS
 export const getPolicy     = (id)           => req('GET', `/policies/${id}`);
 export const createPolicy  = (body)         => req('POST', '/policies', body);
 export const updatePolicy  = (id, body)     => req('PATCH', `/policies/${id}`, body);
+export const deletePolicy  = (id)           => req('DELETE', `/policies/${id}`);
 export const importFile    = (dump_id, file) => req('POST', '/policies/import', { dump_id }, file);
 
 // Auth + export

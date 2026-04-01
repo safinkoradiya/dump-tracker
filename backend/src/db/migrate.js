@@ -46,12 +46,14 @@ const migrate = async () => {
       updated_at          TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  await query(`ALTER TABLE policies ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;`);
 
   // Indexes for common filter queries
   await query(`CREATE INDEX IF NOT EXISTS idx_policies_dump_id    ON policies(dump_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_policies_rm_name    ON policies(rm_name);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_policies_resolved   ON policies(rm_resolved, company_resolved);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_policies_recv_date  ON policies(recv_date);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_policies_deleted_at ON policies(deleted_at);`);
 
   // Auto-update updated_at trigger
   await query(`
@@ -81,4 +83,3 @@ migrate().catch((err) => {
   console.error('Migration failed:', err);
   process.exit(1);
 });
-

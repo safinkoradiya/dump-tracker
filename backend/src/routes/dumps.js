@@ -13,12 +13,13 @@ router.get('/', async (req, res) => {
   let sql = `
     SELECT
       d.*,
-      COUNT(p.id)::int                                          AS total_policies,
-      COUNT(p.id) FILTER (WHERE p.rm_resolved AND p.company_resolved)::int AS resolved_count,
+      COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL)::int AS total_policies,
+      COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL AND p.rm_resolved AND p.company_resolved)::int AS resolved_count,
+      COUNT(p.id) FILTER (WHERE p.deleted_at IS NOT NULL)::int AS deleted_policies,
       CASE
-        WHEN COUNT(p.id) = 0 THEN 'Pending'
-        WHEN COUNT(p.id) FILTER (WHERE p.rm_resolved AND p.company_resolved) = COUNT(p.id) THEN 'Completed'
-        WHEN COUNT(p.id) FILTER (WHERE p.rm_resolved AND p.company_resolved) > 0 THEN 'In Progress'
+        WHEN COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL) = 0 THEN 'Pending'
+        WHEN COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL AND p.rm_resolved AND p.company_resolved) = COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL) THEN 'Completed'
+        WHEN COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL AND p.rm_resolved AND p.company_resolved) > 0 THEN 'In Progress'
         ELSE 'Pending'
       END AS status
     FROM dumps d
@@ -47,8 +48,9 @@ router.get('/:id', async (req, res) => {
   const result = await query(`
     SELECT
       d.*,
-      COUNT(p.id)::int AS total_policies,
-      COUNT(p.id) FILTER (WHERE p.rm_resolved AND p.company_resolved)::int AS resolved_count
+      COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL)::int AS total_policies,
+      COUNT(p.id) FILTER (WHERE p.deleted_at IS NULL AND p.rm_resolved AND p.company_resolved)::int AS resolved_count,
+      COUNT(p.id) FILTER (WHERE p.deleted_at IS NOT NULL)::int AS deleted_policies
     FROM dumps d
     LEFT JOIN policies p ON p.dump_id = d.id
     WHERE d.id = $1
