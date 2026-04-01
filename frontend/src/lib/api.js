@@ -22,14 +22,21 @@ async function req(method, path, body, file) {
   }
 
   const res = await fetch(url, opts);
-  const json = await res.json();
+  let json = null;
+  try {
+    json = await res.json();
+  } catch {
+    // Some failed responses may not have a JSON body.
+  }
   if (res.status === 401) {
-  localStorage.clear();
-  window.location.href = "/login";
-  return;
-}
+    if (path !== '/auth/login') {
+      localStorage.clear();
+      window.location.href = "/login";
+    }
+    throw new Error(json?.error || 'Unauthorized');
+  }
 
-if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
   return json;
 }
 
