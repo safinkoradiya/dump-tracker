@@ -3,7 +3,8 @@ import multer from 'multer';
 import XLSX from 'xlsx';
 import { query } from '../db/pool.js';
 import { nextPolicyId, ensureSequences } from '../db/sequences.js';
-import { authMiddleware, requireAdmin } from "../middleware/auth.js";
+import { requireDataManage, requireDiscrepancyRmAccess } from "../middleware/auth.js";
+import { applyAssignedRmScope, scopedRmExpression } from '../lib/access.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -26,7 +27,7 @@ function getBucket(days) {
 }
 
 // GET /api/policies — list with filters + pagination
-router.get('/', async (req, res) => {
+router.get('/', requireDiscrepancyRmAccess, async (req, res) => {
   const {
     dump_id, rm_name, status, company,
     bucket, pending_side,
@@ -48,6 +49,7 @@ router.get('/', async (req, res) => {
   if (status === 'Resolved') where.push(`(p.rm_resolved AND p.company_resolved)`);
   if (status === 'Pending')  where.push(`NOT (p.rm_resolved AND p.company_resolved)`);
   where.push(`p.deleted_at IS NULL`);
+  applyAssignedRmScope(req.user, params, where, scopedRmExpression('p'));
 
   const whereSQL = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
@@ -96,10 +98,16 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/policies/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireDiscrepancyRmAccess, async (req, res) => {
+  const params = [req.params.id];
+  const where = [`p.id = $1`, `p.deleted_at IS NULL`];
+  applyAssignedRmScope(req.user, params, where, scopedRmExpression('p'));
   const result = await query(
-    `SELECT p.*, d.company FROM policies p JOIN dumps d ON d.id = p.dump_id WHERE p.id = $1 AND p.deleted_at IS NULL`,
-    [req.params.id]
+    `SELECT p.*, d.company
+     FROM policies p
+     JOIN dumps d ON d.id = p.dump_id
+     WHERE ${where.join(' AND ')}`,
+    params
   );
   if (!result.rows.length) return res.status(404).json({ error: 'Policy not found' });
   const p = result.rows[0];
@@ -114,7 +122,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/policies — add single policy
-router.post('/', async (req, res) => {
+router.post('/', requireDataManage, async (req, res) => {
   await ensureSequences();
   const { policy_no, dump_id, recv_date, rm_name, imd_name, given_date,
           rm_response, rm_resolved, company_resolved, remarks, pending_side, extra } = req.body;
@@ -141,7 +149,7 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH /api/policies/:id — update any field
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireDataManage, async (req, res) => {
   const { rm_name, imd_name, given_date, recv_date, rm_response,
           rm_resolved, company_resolved, remarks, pending_side } = req.body;
 
@@ -174,7 +182,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // POST /api/policies/import — Excel/CSV bulk import linked to a dump
-router.post("/import", authMiddleware, requireAdmin, upload.single('file'), async (req, res) => {
+router.post("/import", requireDataManage, upload.single('file'), async (req, res) => {
   await ensureSequences();
   const { dump_id } = req.body;
   if (!dump_id)    return res.status(400).json({ error: 'dump_id is required' });
@@ -241,7 +249,7 @@ router.post("/import", authMiddleware, requireAdmin, upload.single('file'), asyn
   res.status(201).json({ message: `Imported ${inserted} policies into ${dump_id}`, count: inserted });
 });
 
-router.delete('/:id', authMiddleware, requireAdmin, async (req, res) => {
+router.delete('/:id', requireDataManage, async (req, res) => {
   const result = await query(`
     UPDATE policies
     SET deleted_at = NOW()

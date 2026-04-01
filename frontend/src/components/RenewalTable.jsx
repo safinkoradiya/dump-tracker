@@ -3,11 +3,11 @@ import { decorateRenewal, RENEWAL_BUCKET_LABELS, renewalBucketClass, renewalDays
 import { fmtDate } from '../lib/utils.js';
 import { EmptyState } from './UI.jsx';
 import RenewalModal from './RenewalModal.jsx';
+import { canManageData } from '../lib/access.js';
 
 export default function RenewalTable({ renewals = [], onUpdated }) {
   const [selected, setSelected] = useState(null);
-  const role = localStorage.getItem('role');
-  const isViewer = role === 'viewer';
+  const canEdit = canManageData();
 
   if (!renewals.length) return <EmptyState text="No renewals found" hint="Upload a renewal dump to populate this view" />;
 
@@ -27,7 +27,7 @@ export default function RenewalTable({ renewals = [], onUpdated }) {
               <th>Bucket</th>
               <th>Status</th>
               <th>Customer</th>
-              {!isViewer && <th>Actions</th>}
+              {canEdit && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -45,7 +45,7 @@ export default function RenewalTable({ renewals = [], onUpdated }) {
                   <td><span className={`badge ${renewalBucketClass(renewal.bucket)}`}>{RENEWAL_BUCKET_LABELS[renewal.bucket] || 'Unknown'}</span></td>
                   <td><span className={`badge ${renewalStatusClass(renewal.status)}`}>{renewal.status}</span></td>
                   <td>{renewal.customer_response || 'No Response'}</td>
-                  {!isViewer && (
+                  {canEdit && (
                     <td onClick={(e) => e.stopPropagation()}>
                       <button className="btn sm danger" onClick={() => setSelected(renewal)}>Delete</button>
                     </td>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { login } from "../lib/api.js";
+import { getDefaultRoute, storeAuthState } from "../lib/access.js";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -8,14 +9,11 @@ export default function Login() {
   const handleLogin = async () => {
     try {
       const data = await login({ username, password });
-
-      // ✅ STORE EVERYTHING HERE (CORRECT PLACE)
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
-      localStorage.setItem("username", data.username);
-
-      // ✅ redirect after login
-      window.location.href = "/";
+      storeAuthState(data);
+      window.location.href = getDefaultRoute({
+        role: data.role,
+        permissions: data.permissions,
+      });
 
     } catch (err) {
       alert(err.message);

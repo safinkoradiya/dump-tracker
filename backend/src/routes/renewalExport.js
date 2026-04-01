@@ -1,11 +1,11 @@
 import express from 'express';
 import ExcelJS from 'exceljs';
 import pool from '../db/pool.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireDataManage } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.post('/excel', requireAdmin, async (req, res) => {
+router.post('/excel', requireDataManage, async (req, res) => {
   try {
     const { fields = [], dumpIds = [] } = req.body;
     if (!fields.length) return res.status(400).json({ error: 'No fields selected' });

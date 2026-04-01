@@ -1,22 +1,38 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { decorateRenewal } from '../lib/renewals.js';
+import { applyAssignedRmScope, hasAssignedRmScope, scopedRmExpression } from '../lib/access.js';
+import { requireRenewalRmAccess, requireRenewalView } from '../middleware/auth.js';
 
 const router = Router();
 
-async function activeRenewals() {
+async function activeRenewals(user) {
+  const params = [];
+  const where = ['r.deleted_at IS NULL'];
+  applyAssignedRmScope(user, params, where, scopedRmExpression('r'));
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const result = await query(`
     SELECT r.*
     FROM renewals r
-    WHERE r.deleted_at IS NULL
-  `);
+    ${whereSql}
+  `, params);
   return result.rows.map(decorateRenewal);
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireRenewalView, async (req, res) => {
+  const dumpParams = [];
+  const dumpWhere = ['r.deleted_at IS NULL'];
+  applyAssignedRmScope(req.user, dumpParams, dumpWhere, scopedRmExpression('r'));
+  const dumpWhereSql = dumpWhere.length ? `WHERE ${dumpWhere.join(' AND ')}` : '';
   const [dumpRes, renewals] = await Promise.all([
-    query(`SELECT COUNT(*)::int AS total FROM renewal_dumps`),
-    activeRenewals(),
+    hasAssignedRmScope(req.user)
+      ? query(`
+          SELECT COUNT(DISTINCT r.renewal_dump_id)::int AS total
+          FROM renewals r
+          ${dumpWhereSql}
+        `, dumpParams)
+      : query(`SELECT COUNT(*)::int AS total FROM renewal_dumps`),
+    activeRenewals(req.user),
   ]);
 
   const dueSoon = renewals.filter((row) => row.is_due_soon).length;
@@ -36,8 +52,8 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.get('/buckets', async (req, res) => {
-  const renewals = await activeRenewals();
+router.get('/buckets', requireRenewalView, async (req, res) => {
+  const renewals = await activeRenewals(req.user);
   const counts = renewals.reduce((acc, row) => {
     acc[row.bucket] = (acc[row.bucket] || 0) + 1;
     return acc;
@@ -46,8 +62,8 @@ router.get('/buckets', async (req, res) => {
   res.json({ data: counts });
 });
 
-router.get('/rm', async (req, res) => {
-  const renewals = await activeRenewals();
+router.get('/rm', requireRenewalRmAccess, async (req, res) => {
+  const renewals = await activeRenewals(req.user);
   const grouped = renewals.reduce((acc, row) => {
     const key = row.rm_name || 'Unassigned';
     acc[key] ||= { rm_name: key, total: 0, renewed: 0, dueSoon: 0, expired: 0, noResponse: 0 };
@@ -64,8 +80,8 @@ router.get('/rm', async (req, res) => {
   });
 });
 
-router.get('/customers', async (req, res) => {
-  const renewals = await activeRenewals();
+router.get('/customers', requireRenewalView, async (req, res) => {
+  const renewals = await activeRenewals(req.user);
   const grouped = renewals.reduce((acc, row) => {
     const key = row.customer_response || 'No Response';
     acc[key] ||= { customer_response: key, total: 0 };

@@ -3,11 +3,11 @@ import { deleteRenewal, updateRenewal } from '../lib/api.js';
 import { CUSTOMER_RESPONSE_OPTIONS, RENEWAL_BUCKET_LABELS, RENEWAL_STATUS_OPTIONS, decorateRenewal, renewalBucketClass, renewalDaysLabel, renewalStatusClass } from '../lib/renewalUtils.js';
 import { fmtDate } from '../lib/utils.js';
 import { useToast } from './Toast.jsx';
+import { canManageData } from '../lib/access.js';
 
 export default function RenewalModal({ renewal, onClose, onSaved, onDeleted }) {
   const toast = useToast();
-  const role = localStorage.getItem('role');
-  const isViewer = role === 'viewer';
+  const canEdit = canManageData();
   const record = decorateRenewal(renewal);
   const [form, setForm] = useState({
     rm_name: record.rm_name || '',
@@ -109,47 +109,47 @@ export default function RenewalModal({ renewal, onClose, onSaved, onDeleted }) {
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Assigned RM</label>
-                <input disabled={isViewer} className="form-control" value={form.rm_name} onChange={(e) => set('rm_name', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" value={form.rm_name} onChange={(e) => set('rm_name', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Status</label>
-                <select disabled={isViewer} className="form-control" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                <select disabled={!canEdit} className="form-control" value={form.status} onChange={(e) => set('status', e.target.value)}>
                   {RENEWAL_STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Customer Response</label>
-                <select disabled={isViewer} className="form-control" value={form.customer_response} onChange={(e) => set('customer_response', e.target.value)}>
+                <select disabled={!canEdit} className="form-control" value={form.customer_response} onChange={(e) => set('customer_response', e.target.value)}>
                   {CUSTOMER_RESPONSE_OPTIONS.map((option) => <option key={option}>{option}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Pending With</label>
-                <input disabled={isViewer} className="form-control" value={form.pending_with} onChange={(e) => set('pending_with', e.target.value)} placeholder="RM / Customer / Insurer…" />
+                <input disabled={!canEdit} className="form-control" value={form.pending_with} onChange={(e) => set('pending_with', e.target.value)} placeholder="RM / Customer / Insurer…" />
               </div>
               <div className="form-group">
                 <label className="form-label">Next Follow-up</label>
-                <input disabled={isViewer} className="form-control" type="date" value={form.next_follow_up_date} onChange={(e) => set('next_follow_up_date', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" type="date" value={form.next_follow_up_date} onChange={(e) => set('next_follow_up_date', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Quoted Premium</label>
-                <input disabled={isViewer} className="form-control" value={form.quoted_premium} onChange={(e) => set('quoted_premium', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" value={form.quoted_premium} onChange={(e) => set('quoted_premium', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Renewed Premium</label>
-                <input disabled={isViewer} className="form-control" value={form.renewed_premium} onChange={(e) => set('renewed_premium', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" value={form.renewed_premium} onChange={(e) => set('renewed_premium', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Renewed Insurer</label>
-                <input disabled={isViewer} className="form-control" value={form.renewed_insurer} onChange={(e) => set('renewed_insurer', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" value={form.renewed_insurer} onChange={(e) => set('renewed_insurer', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Renewed On</label>
-                <input disabled={isViewer} className="form-control" type="date" value={form.renewed_on} onChange={(e) => set('renewed_on', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" type="date" value={form.renewed_on} onChange={(e) => set('renewed_on', e.target.value)} />
               </div>
               <div className="form-group full">
                 <label className="form-label">Remarks</label>
-                <textarea disabled={isViewer} className="form-control" rows={3} value={form.remarks} onChange={(e) => set('remarks', e.target.value)} />
+                <textarea disabled={!canEdit} className="form-control" rows={3} value={form.remarks} onChange={(e) => set('remarks', e.target.value)} />
               </div>
             </div>
           </div>
@@ -161,13 +161,13 @@ export default function RenewalModal({ renewal, onClose, onSaved, onDeleted }) {
         </div>
 
         <div className="modal-footer">
-          {!isViewer && (
+          {canEdit && (
             <button className="btn danger" onClick={remove} disabled={saving || deleting}>
               {deleting ? 'Deleting…' : 'Delete Renewal'}
             </button>
           )}
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn primary" onClick={save} disabled={saving || deleting || isViewer}>
+          <button className="btn primary" onClick={save} disabled={saving || deleting || !canEdit}>
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
         </div>

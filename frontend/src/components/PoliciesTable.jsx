@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { fmtDate, daysPending } from '../lib/utils.js';
 import { StatusBadge, BucketBadge, DaysBadge, CheckBadge, EmptyState } from './UI.jsx';
 import PolicyModal from './PolicyModal.jsx';
+import { canManageData } from '../lib/access.js';
 
 export default function PoliciesTable({ policies = [], onUpdated }) {
   const [selected, setSelected] = useState(null);
-  const role = localStorage.getItem("role");
-  const isViewer = role === "viewer";
+  const canEdit = canManageData();
 
   const handleSaved = (updated) => {
     if (onUpdated) onUpdated(updated);
@@ -37,7 +37,7 @@ export default function PoliciesTable({ policies = [], onUpdated }) {
               <th>RM ✓</th>
               <th>Co. ✓</th>
               <th>Status</th>
-              {!isViewer && <th>Actions</th>}
+              {canEdit && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -60,7 +60,7 @@ export default function PoliciesTable({ policies = [], onUpdated }) {
                   <td><CheckBadge value={p.rm_resolved} /></td>
                   <td><CheckBadge value={p.company_resolved} /></td>
                   <td><StatusBadge status={status} /></td>
-                  {!isViewer && (
+                  {canEdit && (
                     <td onClick={e => e.stopPropagation()}>
                       <button className="btn sm danger" onClick={() => setSelected(p)}>
                         Delete

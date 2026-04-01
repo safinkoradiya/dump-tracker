@@ -4,12 +4,13 @@ import multer from 'multer';
 import { query } from '../db/pool.js';
 import { ensureSequences } from '../db/sequences.js';
 import { decorateRenewal, parseRenewalWorkbook } from '../lib/renewals.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireDataManage, requireRenewalRmAccess } from '../middleware/auth.js';
+import { applyAssignedRmScope, scopedRmExpression } from '../lib/access.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
-router.get('/', async (req, res) => {
+router.get('/', requireRenewalRmAccess, async (req, res) => {
   const {
     renewal_dump_id,
     rm_name,
@@ -54,6 +55,7 @@ router.get('/', async (req, res) => {
       OR r.rm_name ILIKE $${idx}
     )`);
   }
+  applyAssignedRmScope(req.user, params, where, scopedRmExpression('r'));
 
   params.push(Number(limit));
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -69,20 +71,22 @@ router.get('/', async (req, res) => {
   res.json({ data: result.rows.map(decorateRenewal) });
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireRenewalRmAccess, async (req, res) => {
+  const params = [req.params.id];
+  const where = [`r.id = $1`, `r.deleted_at IS NULL`];
+  applyAssignedRmScope(req.user, params, where, scopedRmExpression('r'));
   const result = await query(`
     SELECT r.*, d.company AS dump_company
     FROM renewals r
     JOIN renewal_dumps d ON d.id = r.renewal_dump_id
-    WHERE r.id = $1
-      AND r.deleted_at IS NULL
-  `, [req.params.id]);
+    WHERE ${where.join(' AND ')}
+  `, params);
 
   if (!result.rows.length) return res.status(404).json({ error: 'Renewal record not found' });
   res.json({ data: decorateRenewal(result.rows[0]) });
 });
 
-router.patch('/:id', requireAdmin, async (req, res) => {
+router.patch('/:id', requireDataManage, async (req, res) => {
   const {
     rm_name,
     status,
@@ -130,7 +134,7 @@ router.patch('/:id', requireAdmin, async (req, res) => {
   res.json({ data: decorateRenewal(result.rows[0]) });
 });
 
-router.post('/import', requireAdmin, upload.single('file'), async (req, res) => {
+router.post('/import', requireDataManage, upload.single('file'), async (req, res) => {
   await ensureSequences();
   const { renewal_dump_id } = req.body;
   if (!renewal_dump_id) return res.status(400).json({ error: 'renewal_dump_id is required' });
@@ -238,7 +242,7 @@ router.post('/import', requireAdmin, upload.single('file'), async (req, res) => 
   });
 });
 
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireDataManage, async (req, res) => {
   const result = await query(`
     UPDATE renewals
     SET deleted_at = NOW()

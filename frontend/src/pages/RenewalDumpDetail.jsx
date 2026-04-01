@@ -5,13 +5,13 @@ import { fmtDate } from '../lib/utils.js';
 import { Loading, ErrorMsg, StatCard } from '../components/UI.jsx';
 import { useToast } from '../components/Toast.jsx';
 import RenewalTable from '../components/RenewalTable.jsx';
+import { canManageData } from '../lib/access.js';
 
 export default function RenewalDumpDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const role = localStorage.getItem('role');
-  const isViewer = role === 'viewer';
+  const canEdit = canManageData();
 
   const dump = useApi(() => getRenewalDump(id), [id]);
   const renewals = useApi(() => getRenewals({ renewal_dump_id: id, limit: 1000 }), [id]);
@@ -60,13 +60,13 @@ export default function RenewalDumpDetail() {
           ) : <div className="page-title">Loading…</div>}
         </div>
         <div className="header-actions">
-          {!isViewer && (
+          {canEdit && (
             <label className="btn">
               Import Renewal File
               <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImport} />
             </label>
           )}
-          {!isViewer && <button className="btn danger" onClick={handleDeleteDump}>Delete Dump</button>}
+          {canEdit && <button className="btn danger" onClick={handleDeleteDump}>Delete Dump</button>}
         </div>
       </div>
 

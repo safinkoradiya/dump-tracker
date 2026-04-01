@@ -7,12 +7,12 @@ import { ProgressBar, StatCard, StatusBadge, Loading, ErrorMsg, EmptyState } fro
 import { useToast } from '../components/Toast.jsx';
 import NewRenewalDumpModal from '../components/NewRenewalDumpModal.jsx';
 import RenewalExportModal from '../components/RenewalExportModal.jsx';
+import { canManageData } from '../lib/access.js';
 
 export default function RenewalDumps() {
   const navigate = useNavigate();
   const toast = useToast();
-  const role = localStorage.getItem('role');
-  const isViewer = role === 'viewer';
+  const canEdit = canManageData();
   const [showNew, setShowNew] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [search, setSearch] = useState('');
@@ -53,8 +53,8 @@ export default function RenewalDumps() {
           <div className="page-desc">Upload and track renewal-specific policy dump batches</div>
         </div>
         <div className="header-actions">
-          <button className="btn primary" onClick={() => setShowNew(true)} disabled={isViewer}>+ Upload Renewal Dump</button>
-          <button className="btn" onClick={() => setShowExport(true)} disabled={isViewer}>Export</button>
+          <button className="btn primary" onClick={() => setShowNew(true)} disabled={!canEdit}>+ Upload Renewal Dump</button>
+          <button className="btn" onClick={() => setShowExport(true)} disabled={!canEdit}>Export</button>
         </div>
       </div>
 
@@ -100,7 +100,7 @@ export default function RenewalDumps() {
                         <th>Deleted</th>
                         <th>Status</th>
                         <th>Renewal Progress</th>
-                        {!isViewer && <th>Actions</th>}
+                        {canEdit && <th>Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -120,7 +120,7 @@ export default function RenewalDumps() {
                               {dump.renewed_count}/{dump.total_renewals} renewed
                             </div>
                           </td>
-                          {!isViewer && (
+                          {canEdit && (
                             <td onClick={(e) => e.stopPropagation()}>
                               <button className="btn sm danger" onClick={() => handleDelete(dump.id)}>Delete</button>
                             </td>

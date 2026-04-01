@@ -1,3 +1,5 @@
+import { clearAuthState } from './access.js';
+
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 async function req(method, path, body, file) {
@@ -30,7 +32,7 @@ async function req(method, path, body, file) {
   }
   if (res.status === 401) {
     if (path !== '/auth/login') {
-      localStorage.clear();
+      clearAuthState();
       window.location.href = "/login";
     }
     throw new Error(json?.error || 'Unauthorized');
@@ -53,7 +55,7 @@ async function reqBlob(method, path, body) {
   });
 
   if (res.status === 401) {
-    localStorage.clear();
+    clearAuthState();
     window.location.href = '/login';
     return;
   }
@@ -89,6 +91,11 @@ export const importFile    = (dump_id, file) => req('POST', '/policies/import', 
 
 // Auth + export
 export const login       = (body) => req('POST', '/auth/login', body);
+export const getMe       = () => req('GET', '/auth/me');
+export const getUsers    = () => req('GET', '/auth/users');
+export const registerUser = (body) => req('POST', '/auth/register', body);
+export const updateUser  = (id, body) => req('PATCH', `/auth/users/${id}`, body);
+export const deleteUserAccount = (id) => req('DELETE', `/auth/users/${id}`);
 export const exportExcel = (body) => reqBlob('POST', '/export/excel', body);
 
 // Stats

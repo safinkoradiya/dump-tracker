@@ -7,6 +7,7 @@ import { StatCard, ProgressBar, Loading, ErrorMsg } from '../components/UI.jsx';
 import PoliciesTable from '../components/PoliciesTable.jsx';
 import { useToast } from '../components/Toast.jsx';
 import NewDumpModal from '../components/NewDumpModal.jsx';
+import { canManageData } from '../lib/access.js';
 
 export default function DumpDetail() {
   const { id } = useParams();
@@ -15,8 +16,7 @@ export default function DumpDetail() {
   const [rmFilter, setRmFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const fileRef = { current: null };
-  const role = localStorage.getItem("role");
-  const isViewer = role === "viewer";
+  const canEdit = canManageData();
 
   const dump   = useApi(() => getDump(id), [id]);
   const polsRes = useApi(() => getPolicies({ dump_id: id, limit: 500 }), [id]);
@@ -75,11 +75,11 @@ export default function DumpDetail() {
           ) : <div className="page-title">Loading…</div>}
         </div>
         <div className="header-actions">
-          <label className="btn">
+          <label className="btn" style={!canEdit ? { opacity: 0.6, pointerEvents: 'none' } : undefined}>
             Import Excel
             <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleFileImport} />
           </label>
-          {!isViewer && (
+          {canEdit && (
             <button className="btn danger" onClick={handleDeleteDump}>
               Delete Dump
             </button>

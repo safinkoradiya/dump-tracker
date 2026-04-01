@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { nextDumpId, ensureSequences } from '../db/sequences.js';
-import { authMiddleware, requireAdmin } from "../middleware/auth.js";
+import { requireDataManage, requireDiscrepancyView } from "../middleware/auth.js";
 
 
 const router = Router();
 
 // GET /api/dumps — list all dumps with live progress
-router.get('/', async (req, res) => {
+router.get('/', requireDiscrepancyView, async (req, res) => {
   const { company, status } = req.query;
 
   let sql = `
@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/dumps/:id — single dump with progress
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireDiscrepancyView, async (req, res) => {
   const result = await query(`
     SELECT
       d.*,
@@ -62,7 +62,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/dumps — create a new dump
-router.post("/", authMiddleware, requireAdmin, async (req, res) => {
+router.post("/", requireDataManage, async (req, res) => {
   await ensureSequences();
   const { company, upload_date, remarks } = req.body;
   if (!company) return res.status(400).json({ error: 'company is required' });
@@ -78,7 +78,7 @@ router.post("/", authMiddleware, requireAdmin, async (req, res) => {
 });
 
 // PATCH /api/dumps/:id — update dump details
-router.patch("/:id", authMiddleware, requireAdmin, async (req, res) => {
+router.patch("/:id", requireDataManage, async (req, res) => {
   const { company, upload_date, remarks } = req.body;
   const result = await query(`
     UPDATE dumps SET
@@ -93,7 +93,7 @@ router.patch("/:id", authMiddleware, requireAdmin, async (req, res) => {
 });
 
 // DELETE /api/dumps/:id — cascades to policies
-router.delete("/:id", authMiddleware, requireAdmin, async (req, res) => {
+router.delete("/:id", requireDataManage, async (req, res) => {
   const result = await query('DELETE FROM dumps WHERE id=$1 RETURNING id', [req.params.id]);
   if (!result.rows.length) return res.status(404).json({ error: 'Dump not found' });
   res.json({ message: 'Deleted', id: req.params.id });

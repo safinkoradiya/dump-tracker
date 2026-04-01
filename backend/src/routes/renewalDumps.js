@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { nextRenewalDumpId, ensureSequences } from '../db/sequences.js';
 import { decorateRenewal } from '../lib/renewals.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireDataManage, requireRenewalView } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -30,7 +30,7 @@ function summarizeDump(dump, renewals) {
   };
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireRenewalView, async (req, res) => {
   const dumpsRes = await query(`SELECT * FROM renewal_dumps ORDER BY created_at DESC`);
   const renewalsRes = await query(`
     SELECT renewal_dump_id, status, policy_valid_till, deleted_at
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
   res.json({ data: rows });
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireRenewalView, async (req, res) => {
   const dumpRes = await query(`SELECT * FROM renewal_dumps WHERE id = $1`, [req.params.id]);
   if (!dumpRes.rows.length) return res.status(404).json({ error: 'Renewal dump not found' });
 
@@ -60,7 +60,7 @@ router.get('/:id', async (req, res) => {
   res.json({ data: summarizeDump(dumpRes.rows[0], renewalsRes.rows) });
 });
 
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requireDataManage, async (req, res) => {
   await ensureSequences();
   const { company, upload_date, remarks } = req.body;
   if (!company) return res.status(400).json({ error: 'company is required' });
@@ -76,7 +76,7 @@ router.post('/', requireAdmin, async (req, res) => {
   res.status(201).json({ data: result.rows[0] });
 });
 
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireDataManage, async (req, res) => {
   const result = await query(`
     DELETE FROM renewal_dumps
     WHERE id = $1

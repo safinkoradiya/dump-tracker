@@ -7,7 +7,7 @@ dotenv.config();
 
 const username = process.env.ADMIN_USERNAME;
 const password = process.env.ADMIN_PASSWORD;
-const role = process.env.ADMIN_ROLE === "viewer" ? "viewer" : "admin";
+const role = "admin";
 
 async function seedUser() {
   if (!username || !password) {
@@ -18,13 +18,17 @@ async function seedUser() {
   const hash = await bcrypt.hash(password, 10);
   const result = await pool.query(
     `
-      INSERT INTO users (id, username, password, role)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO users (id, username, password, role, permissions, assigned_rm)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
       ON CONFLICT (username)
-      DO UPDATE SET password = EXCLUDED.password, role = EXCLUDED.role
-      RETURNING id, username, role
+      DO UPDATE SET
+        password = EXCLUDED.password,
+        role = EXCLUDED.role,
+        permissions = EXCLUDED.permissions,
+        assigned_rm = EXCLUDED.assigned_rm
+      RETURNING id, username, role, permissions, assigned_rm
     `,
-    [randomUUID(), username, hash, role]
+    [randomUUID(), username, hash, role, JSON.stringify({ fullAccess: true }), '']
   );
 
   console.log("Seeded user:", result.rows[0]);

@@ -7,6 +7,7 @@ import { StatCard, StatusBadge, ProgressBar, Loading, ErrorMsg, EmptyState } fro
 import NewDumpModal from '../components/NewDumpModal.jsx';
 import ExportModal from "../components/ExportModal";
 import { useToast } from '../components/Toast.jsx';
+import { canManageData } from '../lib/access.js';
  
 
 export default function AllDumps() {
@@ -42,8 +43,7 @@ export default function AllDumps() {
   };
 
   const s = stats.data || {};
-  const role = localStorage.getItem("role");
-  const isViewer = role === "viewer";
+  const canEdit = canManageData();
 
   return (
     <>
@@ -56,8 +56,8 @@ export default function AllDumps() {
           <button
   className="btn primary"
   onClick={() => setShowNew(true)}
-  disabled={isViewer}
-  title={isViewer ? "Read-only access" : ""}
+  disabled={!canEdit}
+  title={!canEdit ? "Read-only access" : ""}
 >
   + Upload Dump
 </button>
@@ -65,8 +65,8 @@ export default function AllDumps() {
           <button
   className="btn"
   onClick={() => setShowExport(true)}
-  disabled={isViewer}
-  title={isViewer ? "Read-only access" : ""}
+  disabled={!canEdit}
+  title={!canEdit ? "Read-only access" : ""}
 >
   Export
 </button>
@@ -113,7 +113,7 @@ export default function AllDumps() {
                         <th>Deleted Policies</th>
                         <th>Status</th>
                         <th>Progress</th>
-                        {!isViewer && <th>Actions</th>}
+                        {canEdit && <th>Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -133,7 +133,7 @@ export default function AllDumps() {
                                 {d.resolved_count}/{d.total_policies} resolved
                               </div>
                             </td>
-                            {!isViewer && (
+                            {canEdit && (
                               <td onClick={e => e.stopPropagation()}>
                                 <button className="btn sm danger" onClick={() => handleDeleteDump(d.id)}>
                                   Delete

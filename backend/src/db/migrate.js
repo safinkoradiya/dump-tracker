@@ -10,10 +10,16 @@ const migrate = async () => {
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    role TEXT DEFAULT 'viewer',
+    role TEXT DEFAULT 'user',
+    permissions JSONB DEFAULT '{}'::jsonb,
+    assigned_rm TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
 `);
+  await query(`ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';`);
+  await query(`UPDATE users SET role = 'user' WHERE role = 'viewer';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '{}'::jsonb;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_rm TEXT DEFAULT '';`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS dumps (

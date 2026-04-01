@@ -3,11 +3,11 @@ import { updatePolicy, deletePolicy } from '../lib/api.js';
 import { fmtDate, daysPending } from '../lib/utils.js';
 import { DaysBadge, BucketBadge } from './UI.jsx';
 import { useToast } from './Toast.jsx';
+import { canManageData } from '../lib/access.js';
 
 export default function PolicyModal({ policy, onClose, onSaved, onDeleted }) {
   const toast = useToast();
-  const role = localStorage.getItem("role");
-  const isViewer = role === "viewer";
+  const canEdit = canManageData();
   const [form, setForm] = useState({
     rm_name:          policy.rm_name || '',
     imd_name:         policy.imd_name || '',
@@ -118,27 +118,27 @@ export default function PolicyModal({ policy, onClose, onSaved, onDeleted }) {
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">RM Name</label>
-                <input disabled={isViewer} className="form-control" value={form.rm_name} onChange={e => set('rm_name', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" value={form.rm_name} onChange={e => set('rm_name', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">IMD Name</label>
-                <input disabled={isViewer} className="form-control" value={form.imd_name} onChange={e => set('imd_name', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" value={form.imd_name} onChange={e => set('imd_name', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Recv. Date (IMD)</label>
-                <input disabled={isViewer} className="form-control" type="date" value={form.recv_date} onChange={e => set('recv_date', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" type="date" value={form.recv_date} onChange={e => set('recv_date', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Date Given to RM</label>
-                <input disabled={isViewer} className="form-control" type="date" value={form.given_date} onChange={e => set('given_date', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" type="date" value={form.given_date} onChange={e => set('given_date', e.target.value)} />
               </div>
               <div className="form-group full">
                 <label className="form-label">RM Response / QC Remarks</label>
-                <textarea disabled={isViewer} className="form-control" rows={3} value={form.rm_response} onChange={e => set('rm_response', e.target.value)} />
+                <textarea disabled={!canEdit} className="form-control" rows={3} value={form.rm_response} onChange={e => set('rm_response', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Pending With <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(manual)</span></label>
-                <input disabled={isViewer} className="form-control" placeholder="e.g. RM, Company, Customer, IMD…" value={form.pending_side} onChange={e => set('pending_side', e.target.value)} />
+                <input disabled={!canEdit} className="form-control" placeholder="e.g. RM, Company, Customer, IMD…" value={form.pending_side} onChange={e => set('pending_side', e.target.value)} />
               </div>
               <div className="form-group">
                 <label className="form-label">Days Pending</label>
@@ -150,21 +150,21 @@ export default function PolicyModal({ policy, onClose, onSaved, onDeleted }) {
               </div>
               <div className="form-group">
                 <label className="form-label">RM Resolved</label>
-                <select disabled={isViewer} className="form-control" value={form.rm_resolved ? '1' : '0'} onChange={e => set('rm_resolved', e.target.value === '1')}>
+                <select disabled={!canEdit} className="form-control" value={form.rm_resolved ? '1' : '0'} onChange={e => set('rm_resolved', e.target.value === '1')}>
                   <option value="0">No</option>
                   <option value="1">Yes</option>
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Company Resolved</label>
-                <select disabled={isViewer} className="form-control" value={form.company_resolved ? '1' : '0'} onChange={e => set('company_resolved', e.target.value === '1')}>
+                <select disabled={!canEdit} className="form-control" value={form.company_resolved ? '1' : '0'} onChange={e => set('company_resolved', e.target.value === '1')}>
                   <option value="0">No</option>
                   <option value="1">Yes</option>
                 </select>
               </div>
               <div className="form-group full">
                 <label className="form-label">Remarks</label>
-                <textarea disabled={isViewer} className="form-control" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+                <textarea disabled={!canEdit} className="form-control" rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} />
               </div>
             </div>
           </div>
@@ -178,7 +178,7 @@ export default function PolicyModal({ policy, onClose, onSaved, onDeleted }) {
         </div>
 
         <div className="modal-footer">
-          {!isViewer && (
+          {canEdit && (
             <button className="btn danger" onClick={remove} disabled={saving || deleting}>
               {deleting ? 'Deleting…' : 'Delete Policy'}
             </button>
@@ -187,8 +187,8 @@ export default function PolicyModal({ policy, onClose, onSaved, onDeleted }) {
          <button
   className="btn primary"
   onClick={save}
-  disabled={saving || deleting || isViewer}
-  title={isViewer ? "Read-only access" : ""}
+  disabled={saving || deleting || !canEdit}
+  title={!canEdit ? "Read-only access" : ""}
 >
   {saving ? 'Saving…' : 'Save Changes'}
 </button>
