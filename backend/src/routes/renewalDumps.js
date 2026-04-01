@@ -1,63 +1,101 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { nextRenewalDumpId, ensureSequences } from '../db/sequences.js';
-import { decorateRenewal } from '../lib/renewals.js';
+import { applyAssignedRmScope, hasAssignedRmScope, scopedRmExpression } from '../lib/access.js';
 import { requireDataManage, requireRenewalView } from '../middleware/auth.js';
 
 const router = Router();
 
-function summarizeDump(dump, renewals) {
-  const active = renewals.filter((row) => !row.deleted_at);
-  const deleted = renewals.filter((row) => row.deleted_at);
-  const decorated = active.map(decorateRenewal);
-  const renewed = decorated.filter((row) => row.status === 'Renewed').length;
-  const dueSoon = decorated.filter((row) => row.is_due_soon).length;
-  const expired = decorated.filter((row) => row.is_expired).length;
-
-  let status = 'Pending';
-  if (decorated.length && renewed === decorated.length) status = 'Completed';
-  else if (renewed > 0) status = 'In Progress';
-  else if (dueSoon || expired) status = 'Pending';
-
+function buildJoin(user, alias = 'r', initialParams = []) {
+  const params = [...initialParams];
+  const joinConditions = [`${alias}.renewal_dump_id = d.id`];
+  if (hasAssignedRmScope(user)) {
+    applyAssignedRmScope(user, params, joinConditions, scopedRmExpression(alias));
+  }
   return {
-    ...dump,
-    total_renewals: decorated.length,
-    renewed_count: renewed,
-    due_soon_count: dueSoon,
-    expired_count: expired,
-    deleted_renewals: deleted.length,
-    status,
+    params,
+    joinSql: `LEFT JOIN renewals ${alias} ON ${joinConditions.join(' AND ')}`,
   };
 }
 
+function statusCase() {
+  return `
+    CASE
+      WHEN COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL) = 0 THEN 'Pending'
+      WHEN COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL AND r.status = 'Renewed') = COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL) THEN 'Completed'
+      WHEN COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL AND r.status = 'Renewed') > 0 THEN 'In Progress'
+      ELSE 'Pending'
+    END AS status
+  `;
+}
+
 router.get('/', requireRenewalView, async (req, res) => {
-  const dumpsRes = await query(`SELECT * FROM renewal_dumps ORDER BY created_at DESC`);
-  const renewalsRes = await query(`
-    SELECT renewal_dump_id, status, policy_valid_till, deleted_at
-    FROM renewals
-  `);
+  const { params, joinSql } = buildJoin(req.user);
+  const havingSql = hasAssignedRmScope(req.user) ? 'HAVING COUNT(r.id) > 0' : '';
 
-  const grouped = renewalsRes.rows.reduce((acc, row) => {
-    acc[row.renewal_dump_id] ||= [];
-    acc[row.renewal_dump_id].push(row);
-    return acc;
-  }, {});
+  const result = await query(
+    `SELECT
+       d.*,
+       COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL)::int AS total_renewals,
+       COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL AND r.status = 'Renewed')::int AS renewed_count,
+       COUNT(r.id) FILTER (
+         WHERE r.deleted_at IS NULL
+           AND r.status <> 'Renewed'
+           AND r.policy_valid_till IS NOT NULL
+           AND r.policy_valid_till >= CURRENT_DATE
+           AND r.policy_valid_till <= CURRENT_DATE + 30
+       )::int AS due_soon_count,
+       COUNT(r.id) FILTER (
+         WHERE r.deleted_at IS NULL
+           AND r.status <> 'Renewed'
+           AND r.policy_valid_till IS NOT NULL
+           AND r.policy_valid_till < CURRENT_DATE
+       )::int AS expired_count,
+       COUNT(r.id) FILTER (WHERE r.deleted_at IS NOT NULL)::int AS deleted_renewals,
+       ${statusCase()}
+     FROM renewal_dumps d
+     ${joinSql}
+     GROUP BY d.id
+     ${havingSql}
+     ORDER BY d.created_at DESC`,
+    params
+  );
 
-  const rows = dumpsRes.rows.map((dump) => summarizeDump(dump, grouped[dump.id] || []));
-  res.json({ data: rows });
+  res.json({ data: result.rows });
 });
 
 router.get('/:id', requireRenewalView, async (req, res) => {
-  const dumpRes = await query(`SELECT * FROM renewal_dumps WHERE id = $1`, [req.params.id]);
-  if (!dumpRes.rows.length) return res.status(404).json({ error: 'Renewal dump not found' });
+  const { params, joinSql } = buildJoin(req.user, 'r', [req.params.id]);
 
-  const renewalsRes = await query(`
-    SELECT renewal_dump_id, status, policy_valid_till, deleted_at
-    FROM renewals
-    WHERE renewal_dump_id = $1
-  `, [req.params.id]);
+  const result = await query(
+    `SELECT
+       d.*,
+       COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL)::int AS total_renewals,
+       COUNT(r.id) FILTER (WHERE r.deleted_at IS NULL AND r.status = 'Renewed')::int AS renewed_count,
+       COUNT(r.id) FILTER (
+         WHERE r.deleted_at IS NULL
+           AND r.status <> 'Renewed'
+           AND r.policy_valid_till IS NOT NULL
+           AND r.policy_valid_till >= CURRENT_DATE
+           AND r.policy_valid_till <= CURRENT_DATE + 30
+       )::int AS due_soon_count,
+       COUNT(r.id) FILTER (
+         WHERE r.deleted_at IS NULL
+           AND r.status <> 'Renewed'
+           AND r.policy_valid_till IS NOT NULL
+           AND r.policy_valid_till < CURRENT_DATE
+       )::int AS expired_count,
+       COUNT(r.id) FILTER (WHERE r.deleted_at IS NOT NULL)::int AS deleted_renewals,
+       ${statusCase()}
+     FROM renewal_dumps d
+     ${joinSql}
+     WHERE d.id = $1
+     GROUP BY d.id`,
+    params
+  );
 
-  res.json({ data: summarizeDump(dumpRes.rows[0], renewalsRes.rows) });
+  if (!result.rows.length) return res.status(404).json({ error: 'Renewal dump not found' });
+  res.json({ data: result.rows[0] });
 });
 
 router.post('/', requireDataManage, async (req, res) => {

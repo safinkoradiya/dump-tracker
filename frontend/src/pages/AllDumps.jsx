@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { deleteDump, getDumps, getStats } from '../lib/api.js';
+import { deleteDump, getDumps } from '../lib/api.js';
 import { fmtDate, getDumpStatus, progressColor } from '../lib/utils.js';
 import { useApi } from '../hooks/useApi.js';
 import { StatCard, StatusBadge, ProgressBar, Loading, ErrorMsg, EmptyState } from '../components/UI.jsx';
@@ -21,7 +21,6 @@ export default function AllDumps() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const stats = useApi(() => getStats());
   const dumps = useApi(() => getDumps(), []);
 
   const filtered = (dumps.data || []).filter(d => {
@@ -36,13 +35,21 @@ export default function AllDumps() {
     try {
       await deleteDump(dumpId);
       toast(`Dump ${dumpId} deleted`);
-      await Promise.all([dumps.reload(), stats.reload()]);
+      await dumps.reload();
     } catch (e) {
       toast(e.message, 'error');
     }
   };
 
-  const s = stats.data || {};
+  const s = useMemo(() => {
+    const rows = dumps.data || [];
+    const totalDumps = rows.length;
+    const totalPolicies = rows.reduce((sum, row) => sum + (row.total_policies || 0), 0);
+    const resolved = rows.reduce((sum, row) => sum + (row.resolved_count || 0), 0);
+    const pending = Math.max(0, totalPolicies - resolved);
+    const resolutionPct = totalPolicies > 0 ? Math.round((resolved / totalPolicies) * 100) : 0;
+    return { totalDumps, totalPolicies, resolved, pending, resolutionPct };
+  }, [dumps.data]);
   const canEdit = canManageData();
 
   return (

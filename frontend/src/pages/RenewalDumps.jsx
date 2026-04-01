@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { deleteRenewalDump, getRenewalDumps, getRenewalStats } from '../lib/api.js';
+import { deleteRenewalDump, getRenewalDumps } from '../lib/api.js';
 import { useApi } from '../hooks/useApi.js';
 import { fmtDate } from '../lib/utils.js';
 import { ProgressBar, StatCard, StatusBadge, Loading, ErrorMsg, EmptyState } from '../components/UI.jsx';
@@ -18,7 +18,6 @@ export default function RenewalDumps() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const stats = useApi(() => getRenewalStats());
   const dumps = useApi(() => getRenewalDumps(), []);
 
   const filtered = (dumps.data || []).filter((dump) => {
@@ -29,7 +28,7 @@ export default function RenewalDumps() {
   });
 
   const handleReload = async () => {
-    await Promise.all([stats.reload(), dumps.reload()]);
+    await dumps.reload();
   };
 
   const handleDelete = async (dumpId) => {
@@ -43,7 +42,22 @@ export default function RenewalDumps() {
     }
   };
 
-  const s = stats.data || {};
+  const s = useMemo(() => {
+    const rows = dumps.data || [];
+    return rows.reduce((acc, dump) => ({
+      totalDumps: acc.totalDumps + 1,
+      totalRenewals: acc.totalRenewals + (dump.total_renewals || 0),
+      dueSoon: acc.dueSoon + (dump.due_soon_count || 0),
+      expired: acc.expired + (dump.expired_count || 0),
+      renewed: acc.renewed + (dump.renewed_count || 0),
+    }), {
+      totalDumps: 0,
+      totalRenewals: 0,
+      dueSoon: 0,
+      expired: 0,
+      renewed: 0,
+    });
+  }, [dumps.data]);
 
   return (
     <>

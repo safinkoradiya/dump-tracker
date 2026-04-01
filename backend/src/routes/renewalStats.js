@@ -1,97 +1,175 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
-import { decorateRenewal } from '../lib/renewals.js';
 import { applyAssignedRmScope, hasAssignedRmScope, scopedRmExpression } from '../lib/access.js';
 import { requireRenewalRmAccess, requireRenewalView } from '../middleware/auth.js';
 
 const router = Router();
 
-async function activeRenewals(user) {
+function buildRenewalScope(user, alias = 'r', includeDeleted = false) {
   const params = [];
-  const where = ['r.deleted_at IS NULL'];
-  applyAssignedRmScope(user, params, where, scopedRmExpression('r'));
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const result = await query(`
-    SELECT r.*
-    FROM renewals r
-    ${whereSql}
-  `, params);
-  return result.rows.map(decorateRenewal);
+  const where = [];
+  if (!includeDeleted) where.push(`${alias}.deleted_at IS NULL`);
+  applyAssignedRmScope(user, params, where, scopedRmExpression(alias));
+  return {
+    params,
+    whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '',
+  };
 }
 
 router.get('/', requireRenewalView, async (req, res) => {
-  const dumpParams = [];
-  const dumpWhere = ['r.deleted_at IS NULL'];
-  applyAssignedRmScope(req.user, dumpParams, dumpWhere, scopedRmExpression('r'));
-  const dumpWhereSql = dumpWhere.length ? `WHERE ${dumpWhere.join(' AND ')}` : '';
-  const [dumpRes, renewals] = await Promise.all([
-    hasAssignedRmScope(req.user)
-      ? query(`
-          SELECT COUNT(DISTINCT r.renewal_dump_id)::int AS total
-          FROM renewals r
-          ${dumpWhereSql}
-        `, dumpParams)
-      : query(`SELECT COUNT(*)::int AS total FROM renewal_dumps`),
-    activeRenewals(req.user),
-  ]);
+  const { params, whereSql } = buildRenewalScope(req.user);
 
-  const dueSoon = renewals.filter((row) => row.is_due_soon).length;
-  const expired = renewals.filter((row) => row.is_expired).length;
-  const renewed = renewals.filter((row) => row.status === 'Renewed').length;
-  const noResponse = renewals.filter((row) => row.customer_response === 'No Response').length;
+  const [dumpRes, statsRes] = await Promise.all([
+    hasAssignedRmScope(req.user)
+      ? query(
+          `SELECT COUNT(DISTINCT r.renewal_dump_id)::int AS total
+           FROM renewals r
+           ${whereSql}`,
+          params
+        )
+      : query(`SELECT COUNT(*)::int AS total FROM renewal_dumps`),
+    query(
+      `SELECT
+         COUNT(*)::int AS total_renewals,
+         COUNT(*) FILTER (
+           WHERE status = 'Renewed'
+         )::int AS renewed,
+         COUNT(*) FILTER (
+           WHERE status <> 'Renewed'
+             AND policy_valid_till IS NOT NULL
+             AND policy_valid_till >= CURRENT_DATE
+             AND policy_valid_till <= CURRENT_DATE + 30
+         )::int AS due_soon,
+         COUNT(*) FILTER (
+           WHERE status <> 'Renewed'
+             AND policy_valid_till IS NOT NULL
+             AND policy_valid_till < CURRENT_DATE
+         )::int AS expired,
+         COUNT(*) FILTER (
+           WHERE COALESCE(customer_response, 'No Response') = 'No Response'
+         )::int AS no_response
+       FROM renewals r
+       ${whereSql}`,
+      params
+    ),
+  ]);
 
   res.json({
     data: {
       totalDumps: dumpRes.rows[0].total,
-      totalRenewals: renewals.length,
-      dueSoon,
-      expired,
-      renewed,
-      noResponse,
+      totalRenewals: statsRes.rows[0].total_renewals,
+      dueSoon: statsRes.rows[0].due_soon,
+      expired: statsRes.rows[0].expired,
+      renewed: statsRes.rows[0].renewed,
+      noResponse: statsRes.rows[0].no_response,
     },
   });
 });
 
 router.get('/buckets', requireRenewalView, async (req, res) => {
-  const renewals = await activeRenewals(req.user);
-  const counts = renewals.reduce((acc, row) => {
-    acc[row.bucket] = (acc[row.bucket] || 0) + 1;
-    return acc;
-  }, {});
+  const { params, whereSql } = buildRenewalScope(req.user);
 
-  res.json({ data: counts });
+  const result = await query(
+    `SELECT
+       COUNT(*) FILTER (
+         WHERE status = 'Renewed'
+       )::int AS renewed,
+       COUNT(*) FILTER (
+         WHERE policy_valid_till IS NULL
+           AND status <> 'Renewed'
+       )::int AS unknown,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till = CURRENT_DATE
+       )::int AS due_today,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till > CURRENT_DATE
+           AND policy_valid_till <= CURRENT_DATE + 7
+       )::int AS due_1_7,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till > CURRENT_DATE + 7
+           AND policy_valid_till <= CURRENT_DATE + 15
+       )::int AS due_8_15,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till > CURRENT_DATE + 15
+           AND policy_valid_till <= CURRENT_DATE + 30
+       )::int AS due_16_30,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till > CURRENT_DATE + 30
+       )::int AS due_31_plus,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till < CURRENT_DATE
+           AND policy_valid_till >= CURRENT_DATE - 15
+       )::int AS expired_1_15,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till < CURRENT_DATE - 15
+           AND policy_valid_till >= CURRENT_DATE - 30
+       )::int AS expired_16_30,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till < CURRENT_DATE - 30
+       )::int AS expired_30_plus
+     FROM renewals r
+     ${whereSql}`,
+    params
+  );
+
+  res.json({ data: result.rows[0] });
 });
 
 router.get('/rm', requireRenewalRmAccess, async (req, res) => {
-  const renewals = await activeRenewals(req.user);
-  const grouped = renewals.reduce((acc, row) => {
-    const key = row.rm_name || 'Unassigned';
-    acc[key] ||= { rm_name: key, total: 0, renewed: 0, dueSoon: 0, expired: 0, noResponse: 0 };
-    acc[key].total += 1;
-    if (row.status === 'Renewed') acc[key].renewed += 1;
-    if (row.is_due_soon) acc[key].dueSoon += 1;
-    if (row.is_expired) acc[key].expired += 1;
-    if (row.customer_response === 'No Response') acc[key].noResponse += 1;
-    return acc;
-  }, {});
+  const { params, whereSql } = buildRenewalScope(req.user);
 
-  res.json({
-    data: Object.values(grouped).sort((a, b) => b.total - a.total),
-  });
+  const result = await query(
+    `SELECT
+       COALESCE(NULLIF(rm_name, ''), 'Unassigned') AS rm_name,
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE status = 'Renewed')::int AS renewed,
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till IS NOT NULL
+           AND policy_valid_till >= CURRENT_DATE
+           AND policy_valid_till <= CURRENT_DATE + 30
+       )::int AS "dueSoon",
+       COUNT(*) FILTER (
+         WHERE status <> 'Renewed'
+           AND policy_valid_till IS NOT NULL
+           AND policy_valid_till < CURRENT_DATE
+       )::int AS expired,
+       COUNT(*) FILTER (
+         WHERE COALESCE(customer_response, 'No Response') = 'No Response'
+       )::int AS "noResponse"
+     FROM renewals r
+     ${whereSql}
+     GROUP BY COALESCE(NULLIF(rm_name, ''), 'Unassigned')
+     ORDER BY total DESC, rm_name ASC`,
+    params
+  );
+
+  res.json({ data: result.rows });
 });
 
 router.get('/customers', requireRenewalView, async (req, res) => {
-  const renewals = await activeRenewals(req.user);
-  const grouped = renewals.reduce((acc, row) => {
-    const key = row.customer_response || 'No Response';
-    acc[key] ||= { customer_response: key, total: 0 };
-    acc[key].total += 1;
-    return acc;
-  }, {});
+  const { params, whereSql } = buildRenewalScope(req.user);
 
-  res.json({
-    data: Object.values(grouped).sort((a, b) => b.total - a.total),
-  });
+  const result = await query(
+    `SELECT
+       COALESCE(NULLIF(customer_response, ''), 'No Response') AS customer_response,
+       COUNT(*)::int AS total
+     FROM renewals r
+     ${whereSql}
+     GROUP BY COALESCE(NULLIF(customer_response, ''), 'No Response')
+     ORDER BY total DESC, customer_response ASC`,
+    params
+  );
+
+  res.json({ data: result.rows });
 });
 
 export default router;
