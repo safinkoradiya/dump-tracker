@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getRenewalStats, getRenewals } from '../lib/api.js';
 import { useApi } from '../hooks/useApi.js';
 import { CUSTOMER_RESPONSE_OPTIONS, RENEWAL_STATUS_OPTIONS, decorateRenewal } from '../lib/renewalUtils.js';
@@ -6,11 +8,36 @@ import { Loading, ErrorMsg, StatCard } from '../components/UI.jsx';
 import RenewalTable from '../components/RenewalTable.jsx';
 
 function RenewalListPage({ title, desc, mode }) {
-  const [search, setSearch] = useState('');
-  const [rm, setRm] = useState('');
-  const [status, setStatus] = useState('');
-  const [insurer, setInsurer] = useState('');
-  const [customerResponse, setCustomerResponse] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [rm, setRm] = useState(searchParams.get('rm') || '');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [insurer, setInsurer] = useState(searchParams.get('insurer') || '');
+  const [customerResponse, setCustomerResponse] = useState(searchParams.get('customerResponse') || '');
+
+  useEffect(() => {
+    setSearch(searchParams.get('search') || '');
+    setRm(searchParams.get('rm') || '');
+    setStatus(searchParams.get('status') || '');
+    setInsurer(searchParams.get('insurer') || '');
+    setCustomerResponse(searchParams.get('customerResponse') || '');
+  }, [searchParams]);
+
+  const updateFilters = (next) => {
+    const merged = {
+      search,
+      rm,
+      status,
+      insurer,
+      customerResponse,
+      ...next,
+    };
+    const params = new URLSearchParams();
+    Object.entries(merged).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    setSearchParams(params, { replace: true });
+  };
 
   const res = useApi(() => getRenewals({
     ...(rm ? { rm_name: rm } : {}),
@@ -55,20 +82,20 @@ function RenewalListPage({ title, desc, mode }) {
           <div className="card-header">
             <div className="card-title">{filtered.length} {title}</div>
             <div className="filter-bar">
-              <input className="search-input" placeholder="Search policy / customer / vehicle…" value={search} onChange={(e) => setSearch(e.target.value)} />
-              <select className="filter-select" value={rm} onChange={(e) => setRm(e.target.value)}>
+              <input className="search-input" placeholder="Search policy / customer / vehicle…" value={search} onChange={(e) => updateFilters({ search: e.target.value })} />
+              <select className="filter-select" value={rm} onChange={(e) => updateFilters({ rm: e.target.value })}>
                 <option value="">All RMs</option>
                 {rms.map((item) => <option key={item}>{item}</option>)}
               </select>
-              <select className="filter-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <select className="filter-select" value={status} onChange={(e) => updateFilters({ status: e.target.value })}>
                 <option value="">All Status</option>
                 {RENEWAL_STATUS_OPTIONS.map((item) => <option key={item}>{item}</option>)}
               </select>
-              <select className="filter-select" value={insurer} onChange={(e) => setInsurer(e.target.value)}>
+              <select className="filter-select" value={insurer} onChange={(e) => updateFilters({ insurer: e.target.value })}>
                 <option value="">All Insurers</option>
                 {insurers.map((item) => <option key={item}>{item}</option>)}
               </select>
-              <select className="filter-select" value={customerResponse} onChange={(e) => setCustomerResponse(e.target.value)}>
+              <select className="filter-select" value={customerResponse} onChange={(e) => updateFilters({ customerResponse: e.target.value })}>
                 <option value="">All Customer Responses</option>
                 {CUSTOMER_RESPONSE_OPTIONS.map((item) => <option key={item}>{item}</option>)}
               </select>

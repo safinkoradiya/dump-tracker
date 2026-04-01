@@ -1,8 +1,10 @@
+import { useNavigate } from 'react-router-dom';
 import { getRMStats } from '../lib/api.js';
 import { useApi } from '../hooks/useApi.js';
 import { ProgressBar, Loading, ErrorMsg, EmptyState } from '../components/UI.jsx';
 
 export default function RMTracking() {
+  const navigate = useNavigate();
   const res = useApi(() => getRMStats());
   const rms = res.data || [];
 
@@ -27,7 +29,13 @@ export default function RMTracking() {
                   const pct = rm.total > 0 ? Math.round(rm.fully_resolved / rm.total * 100) : 0;
                   const initials = rm.rm_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
                   return (
-                    <div key={rm.rm_name} className="rm-card">
+                    <div
+                      key={rm.rm_name}
+                      className="rm-card"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/policies?rm=${encodeURIComponent(rm.rm_name)}`)}
+                      title={`Open policies for ${rm.rm_name}`}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                         <div className="rm-avatar">{initials}</div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{rm.rm_name}</div>

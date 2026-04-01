@@ -1,16 +1,44 @@
-import { useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getPolicies, getStats } from '../lib/api.js';
 import { useApi } from '../hooks/useApi.js';
 import { StatCard, Loading, ErrorMsg } from '../components/UI.jsx';
 import PoliciesTable from '../components/PoliciesTable.jsx';
 
 function PoliciesPage({ title, desc, statusFixed, extraFilters, statsVariant }) {
-  const [search, setSearch]   = useState('');
-  const [rm, setRm]           = useState('');
-  const [status, setStatus]   = useState('');
-  const [company, setCompany] = useState('');
-  const [bucket, setBucket]   = useState('');
-  const [side, setSide]       = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch]   = useState(searchParams.get('search') || '');
+  const [rm, setRm]           = useState(searchParams.get('rm') || '');
+  const [status, setStatus]   = useState(searchParams.get('status') || '');
+  const [company, setCompany] = useState(searchParams.get('company') || '');
+  const [bucket, setBucket]   = useState(searchParams.get('bucket') || '');
+  const [side, setSide]       = useState(searchParams.get('side') || '');
+
+  useEffect(() => {
+    setSearch(searchParams.get('search') || '');
+    setRm(searchParams.get('rm') || '');
+    setStatus(searchParams.get('status') || '');
+    setCompany(searchParams.get('company') || '');
+    setBucket(searchParams.get('bucket') || '');
+    setSide(searchParams.get('side') || '');
+  }, [searchParams]);
+
+  const updateFilters = (next) => {
+    const merged = {
+      search,
+      rm,
+      status,
+      company,
+      bucket,
+      side,
+      ...next,
+    };
+    const params = new URLSearchParams();
+    Object.entries(merged).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    setSearchParams(params, { replace: true });
+  };
 
   const params = {
     ...(statusFixed ? { status: statusFixed } : status ? { status } : {}),
@@ -59,31 +87,31 @@ function PoliciesPage({ title, desc, statusFixed, extraFilters, statsVariant }) 
           <div className="card-header">
             <div className="card-title">{filtered.length} {title}</div>
             <div className="filter-bar">
-              <input className="search-input" placeholder="Search policy / RM…" value={search} onChange={e => setSearch(e.target.value)} />
-              <select className="filter-select" value={rm} onChange={e => setRm(e.target.value)}>
+              <input className="search-input" placeholder="Search policy / RM…" value={search} onChange={e => updateFilters({ search: e.target.value })} />
+              <select className="filter-select" value={rm} onChange={e => updateFilters({ rm: e.target.value })}>
                 <option value="">All RMs</option>
                 {rms.map(r => <option key={r}>{r}</option>)}
               </select>
               {!statusFixed && (
-                <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)}>
+                <select className="filter-select" value={status} onChange={e => updateFilters({ status: e.target.value })}>
                   <option value="">All Status</option>
                   <option>Pending</option>
                   <option>Resolved</option>
                 </select>
               )}
-              <select className="filter-select" value={company} onChange={e => setCompany(e.target.value)}>
+              <select className="filter-select" value={company} onChange={e => updateFilters({ company: e.target.value })}>
                 <option value="">All Companies</option>
                 {companies.map(c => <option key={c}>{c}</option>)}
               </select>
               {extraFilters && (
                 <>
-                  <select className="filter-select" value={bucket} onChange={e => setBucket(e.target.value)}>
+                  <select className="filter-select" value={bucket} onChange={e => updateFilters({ bucket: e.target.value })}>
                     <option value="">All Buckets</option>
                     <option value="hot">&lt; 3 Days</option>
                     <option value="warm">3–15 Days</option>
                     <option value="cold">&gt; 15 Days</option>
                   </select>
-                  <select className="filter-select" value={side} onChange={e => setSide(e.target.value)}>
+                  <select className="filter-select" value={side} onChange={e => updateFilters({ side: e.target.value })}>
                     <option value="">All — Pending With</option>
                     <option>RM</option>
                     <option>Company</option>

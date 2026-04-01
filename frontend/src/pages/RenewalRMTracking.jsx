@@ -1,8 +1,10 @@
+import { useNavigate } from 'react-router-dom';
 import { getRenewalRMStats } from '../lib/api.js';
 import { useApi } from '../hooks/useApi.js';
 import { EmptyState, ErrorMsg, Loading, ProgressBar } from '../components/UI.jsx';
 
 export default function RenewalRMTracking() {
+  const navigate = useNavigate();
   const res = useApi(() => getRenewalRMStats());
   const rows = res.data || [];
 
@@ -26,7 +28,13 @@ export default function RenewalRMTracking() {
                 {rows.map((rm) => {
                   const initials = rm.rm_name.split(' ').map((word) => word[0]).join('').slice(0, 2).toUpperCase();
                   return (
-                    <div key={rm.rm_name} className="rm-card">
+                    <div
+                      key={rm.rm_name}
+                      className="rm-card"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/renewals?rm=${encodeURIComponent(rm.rm_name)}`)}
+                      title={`Open renewal records for ${rm.rm_name}`}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                         <div className="rm-avatar">{initials}</div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{rm.rm_name}</div>
