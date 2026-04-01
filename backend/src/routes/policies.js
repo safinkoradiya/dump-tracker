@@ -172,7 +172,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // POST /api/policies/import — Excel/CSV bulk import linked to a dump
-router.post("/import", authMiddleware, requireAdmin, async (req, res) => {
+router.post("/import", authMiddleware, requireAdmin, upload.single('file'), async (req, res) => {
   await ensureSequences();
   const { dump_id } = req.body;
   if (!dump_id)    return res.status(400).json({ error: 'dump_id is required' });
@@ -226,14 +226,14 @@ router.post("/import", authMiddleware, requireAdmin, async (req, res) => {
   let inserted = 0;
   for (const r of mapped) {
     const id = await nextPolicyId();
-    await query(`
+    const insertRes = await query(`
       INSERT INTO policies
         (id, policy_no, dump_id, recv_date, rm_name, imd_name, rm_response, remarks, pending_side, extra)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       ON CONFLICT DO NOTHING
     `, [id, r.policyNo, dump_id, r.recvDate || uploadDate, r.rmName, r.imdName,
         r.rmResponse, r.remarks, '', JSON.stringify(r.extra)]);
-    inserted++;
+    inserted += insertRes.rowCount || 0;
   }
 
   res.status(201).json({ message: `Imported ${inserted} policies into ${dump_id}`, count: inserted });
