@@ -6,17 +6,35 @@ import PendingPolicies from './pages/PendingPolicies.jsx';
 import ResolvedPolicies from './pages/ResolvedPolicies.jsx';
 import RMTracking from './pages/RMTracking.jsx';
 import BucketOverview from './pages/BucketOverview.jsx';
+import RenewalDumps from './pages/RenewalDumps.jsx';
+import RenewalDumpDetail from './pages/RenewalDumpDetail.jsx';
+import AllRenewals from './pages/AllRenewals.jsx';
+import DueSoonRenewals from './pages/DueSoonRenewals.jsx';
+import ExpiredRenewals from './pages/ExpiredRenewals.jsx';
+import RenewalRMTracking from './pages/RenewalRMTracking.jsx';
+import RenewalBucketOverview from './pages/RenewalBucketOverview.jsx';
+import RenewalCustomerTracking from './pages/RenewalCustomerTracking.jsx';
 import Login from "./pages/Login.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import './app.css';
 
-const NAV = [
-  { to: '/', label: 'All Dumps' },
+const DISCREPANCY_NAV = [
+  { to: '/', label: 'All Dumps', end: true },
   { to: '/policies', label: 'All Policies' },
   { to: '/pending', label: 'Pending Policies' },
   { to: '/resolved', label: 'Resolved Policies' },
   { to: '/buckets', label: 'Bucket Overview' },
   { to: '/rm', label: 'RM Tracking' },
+];
+
+const RENEWAL_NAV = [
+  { to: '/renewal-dumps', label: 'Renewal Dumps' },
+  { to: '/renewals', label: 'All Renewals', end: true },
+  { to: '/renewals/due-soon', label: 'Due Soon' },
+  { to: '/renewals/expired', label: 'Expired' },
+  { to: '/renewals/buckets', label: 'Renewal Buckets' },
+  { to: '/renewals/rm', label: 'Renewal RM Tracking' },
+  { to: '/renewals/customers', label: 'Customer Tracking' },
 ];
 
 function Sidebar() {
@@ -28,12 +46,25 @@ function Sidebar() {
       </div>
 
       <nav className="nav">
-        <div className="nav-section">Views</div>
-        {NAV.map(n => (
+        <div className="nav-section">Discrepancies</div>
+        {DISCREPANCY_NAV.map(n => (
           <NavLink
             key={n.to}
             to={n.to}
-            end={n.to === '/'}
+            end={n.end}
+            className={({ isActive }) =>
+              'nav-item' + (isActive ? ' active' : '')
+            }
+          >
+            <span className="nav-dot" />
+            {n.label}
+          </NavLink>
+        ))}
+        <div className="nav-section">Renewals</div>
+        {RENEWAL_NAV.map(n => (
+          <NavLink
+            key={n.to}
+            to={n.to}
             className={({ isActive }) =>
               'nav-item' + (isActive ? ' active' : '')
             }
@@ -82,6 +113,14 @@ export default function App() {
                     <Route path="/resolved" element={<ResolvedPolicies />} />
                     <Route path="/buckets" element={<BucketOverview />} />
                     <Route path="/rm" element={<RMTracking />} />
+                    <Route path="/renewal-dumps" element={<RenewalDumps />} />
+                    <Route path="/renewal-dumps/:id" element={<RenewalDumpDetail />} />
+                    <Route path="/renewals" element={<AllRenewals />} />
+                    <Route path="/renewals/due-soon" element={<DueSoonRenewals />} />
+                    <Route path="/renewals/expired" element={<ExpiredRenewals />} />
+                    <Route path="/renewals/buckets" element={<RenewalBucketOverview />} />
+                    <Route path="/renewals/rm" element={<RenewalRMTracking />} />
+                    <Route path="/renewals/customers" element={<RenewalCustomerTracking />} />
                   </Routes>
                 </main>
               </div>

@@ -15,7 +15,23 @@ export async function nextPolicyId() {
   return `POL-${res.rows[0].num}`;
 }
 
+export async function nextRenewalDumpId() {
+  const res = await query(`
+    SELECT LPAD(nextval('renewal_dump_id_seq')::TEXT, 3, '0') AS num
+  `);
+  return `RND-${res.rows[0].num}`;
+}
+
+export async function nextRenewalId() {
+  const res = await query(`
+    SELECT LPAD(nextval('renewal_id_seq')::TEXT, 3, '0') AS num
+  `);
+  return `REN-${res.rows[0].num}`;
+}
+
 export async function ensureSequences() {
   await query(`CREATE SEQUENCE IF NOT EXISTS dump_id_seq START 1;`);
   await query(`CREATE SEQUENCE IF NOT EXISTS policy_id_seq START 1;`);
+  await query(`CREATE SEQUENCE IF NOT EXISTS renewal_dump_id_seq START 1;`);
+  await query(`CREATE SEQUENCE IF NOT EXISTS renewal_id_seq START 1;`);
 }

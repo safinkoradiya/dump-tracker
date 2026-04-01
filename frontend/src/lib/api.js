@@ -95,3 +95,23 @@ export const exportExcel = (body) => reqBlob('POST', '/export/excel', body);
 export const getStats      = ()  => req('GET', '/stats');
 export const getBuckets    = ()  => req('GET', '/stats/buckets');
 export const getRMStats    = ()  => req('GET', '/stats/rm');
+
+// Renewal dumps
+export const getRenewalDumps    = ()              => req('GET', '/renewal-dumps');
+export const getRenewalDump     = (id)            => req('GET', `/renewal-dumps/${id}`);
+export const createRenewalDump  = (body)          => req('POST', '/renewal-dumps', body);
+export const deleteRenewalDump  = (id)            => req('DELETE', `/renewal-dumps/${id}`);
+
+// Renewals
+export const getRenewals         = (params = {})  => req('GET', '/renewals?' + new URLSearchParams(params));
+export const getRenewal          = (id)           => req('GET', `/renewals/${id}`);
+export const updateRenewal       = (id, body)     => req('PATCH', `/renewals/${id}`, body);
+export const deleteRenewal       = (id)           => req('DELETE', `/renewals/${id}`);
+export const importRenewalFile   = (renewal_dump_id, file) => req('POST', '/renewals/import', { renewal_dump_id }, file);
+
+// Renewal stats + export
+export const getRenewalStats         = () => req('GET', '/renewal-stats');
+export const getRenewalBuckets       = () => req('GET', '/renewal-stats/buckets');
+export const getRenewalRMStats       = () => req('GET', '/renewal-stats/rm');
+export const getRenewalCustomerStats = () => req('GET', '/renewal-stats/customers');
+export const exportRenewalExcel      = (body) => reqBlob('POST', '/renewal-export/excel', body);
