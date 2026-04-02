@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { query } from "../db/pool.js";
 import { authMiddleware, requireAdmin } from "../middleware/auth.js";
+import { authEnv } from "../config/env.js";
 import {
   normalizePermissions,
   normalizeRole,
@@ -11,7 +12,6 @@ import {
 } from "../lib/access.js";
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 
 function normalizeAssignedRm(value) {
   return String(value || '').trim();
@@ -166,7 +166,7 @@ router.post("/login", async (req, res) => {
 
   const token = jwt.sign(
     { id: user.id },
-    JWT_SECRET,
+    authEnv.JWT_SECRET,
     { expiresIn: "1d" }
   );
 

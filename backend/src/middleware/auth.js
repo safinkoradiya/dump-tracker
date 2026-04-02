@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { query } from "../db/pool.js";
+import { authEnv } from "../config/env.js";
 import {
   canManageData,
   canManageUsers,
@@ -9,8 +10,6 @@ import {
   canViewRenewalRmTracking,
   serializeUser,
 } from "../lib/access.js";
-
-const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 
 export async function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
@@ -22,7 +21,7 @@ export async function authMiddleware(req, res, next) {
   const token = auth.split(" ")[1];
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, authEnv.JWT_SECRET);
     const result = await query(
       `SELECT id, username, role, permissions, assigned_rm, created_at
        FROM users

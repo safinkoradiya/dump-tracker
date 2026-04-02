@@ -1,5 +1,3 @@
-import dotenv from "dotenv";
-dotenv.config();
 import 'express-async-errors';
 import authRoutes from "./routes/auth.js";
 import express from 'express';
@@ -15,20 +13,16 @@ import { errorHandler, notFound } from './middleware/errors.js';
 import exportRoutes from "./routes/export.js";
 import renewalExportRoutes from './routes/renewalExport.js';
 import { authMiddleware } from "./middleware/auth.js";
+import { env } from './config/env.js';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
 
 // Security + parsing
 
 app.use(express.json({ limit: '10mb' }));
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || env.ALLOWED_ORIGINS.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
@@ -55,9 +49,9 @@ app.use('/api/renewal-stats', authMiddleware, renewalStatsRouter);
 app.use(notFound);
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`✅ API running on http://localhost:${PORT}`);
-  console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
+app.listen(env.PORT, () => {
+  console.log(`✅ API running on http://localhost:${env.PORT}`);
+  console.log(`   NODE_ENV: ${env.NODE_ENV}`);
 });
 
 export default app;
