@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getRenewalStats, getRenewals } from '../lib/api.js';
 import { useApi } from '../hooks/useApi.js';
-import { CUSTOMER_RESPONSE_OPTIONS, RENEWAL_STATUS_OPTIONS, decorateRenewal } from '../lib/renewalUtils.js';
-import { Loading, ErrorMsg, StatCard } from '../components/UI.jsx';
+import { CUSTOMER_RESPONSE_OPTIONS, RENEWAL_STATUS_OPTIONS } from '../lib/renewalUtils.js';
+import { Loading, ErrorMsg, StatCard, Pagination } from '../components/UI.jsx';
 import RenewalTable from '../components/RenewalTable.jsx';
+
+const PAGE_SIZE = 50;
 
 function RenewalListPage({ title, desc, mode }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,6 +15,7 @@ function RenewalListPage({ title, desc, mode }) {
   const [status, setStatus] = useState(searchParams.get('status') || '');
   const [insurer, setInsurer] = useState(searchParams.get('insurer') || '');
   const [customerResponse, setCustomerResponse] = useState(searchParams.get('customerResponse') || '');
+  const page = Math.max(Number(searchParams.get('page') || 1), 1);
 
   useEffect(() => {
     setSearch(searchParams.get('search') || '');
@@ -23,41 +25,42 @@ function RenewalListPage({ title, desc, mode }) {
     setCustomerResponse(searchParams.get('customerResponse') || '');
   }, [searchParams]);
 
-  const updateFilters = (next) => {
+  const updateFilters = (next, { preservePage = false } = {}) => {
     const merged = {
       search,
       rm,
       status,
       insurer,
       customerResponse,
+      page: String(page),
       ...next,
     };
+
+    if (!preservePage) merged.page = '1';
+
     const params = new URLSearchParams();
     Object.entries(merged).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (value && !(key === 'page' && value === '1')) params.set(key, value);
     });
     setSearchParams(params, { replace: true });
   };
 
   const res = useApi(() => getRenewals({
+    ...(mode !== 'all' ? { mode } : {}),
     ...(rm ? { rm_name: rm } : {}),
     ...(status ? { status } : {}),
     ...(insurer ? { insurer } : {}),
     ...(customerResponse ? { customer_response: customerResponse } : {}),
     ...(search ? { search } : {}),
-    limit: 1000,
-  }), [rm, status, insurer, customerResponse, search]);
+    page,
+    limit: PAGE_SIZE,
+  }), [mode, rm, status, insurer, customerResponse, search, page]);
   const stats = useApi(() => getRenewalStats());
 
-  const renewals = (res.data || []).map(decorateRenewal);
-  const filtered = renewals.filter((renewal) => {
-    if (mode === 'dueSoon') return renewal.is_due_soon;
-    if (mode === 'expired') return renewal.is_expired;
-    return true;
-  });
-
-  const rms = [...new Set(renewals.map((item) => item.rm_name).filter(Boolean))].sort();
-  const insurers = [...new Set(renewals.map((item) => item.insurer).filter(Boolean))].sort();
+  const renewals = res.data || [];
+  const rms = res.response?.meta?.rms || [];
+  const insurers = res.response?.meta?.insurers || [];
+  const total = res.response?.total ?? renewals.length;
   const s = stats.data || {};
 
   return (
@@ -80,7 +83,7 @@ function RenewalListPage({ title, desc, mode }) {
       <div className="content">
         <div className="card">
           <div className="card-header">
-            <div className="card-title">{filtered.length} {title}</div>
+            <div className="card-title">{total} {title}</div>
             <div className="filter-bar">
               <input className="search-input" placeholder="Search policy / customer / vehicle…" value={search} onChange={(e) => updateFilters({ search: e.target.value })} />
               <select className="filter-select" value={rm} onChange={(e) => updateFilters({ rm: e.target.value })}>
@@ -102,7 +105,15 @@ function RenewalListPage({ title, desc, mode }) {
             </div>
           </div>
           {res.loading ? <Loading /> : res.error ? <ErrorMsg msg={res.error} /> : (
-            <RenewalTable renewals={filtered} onUpdated={() => { res.reload(); stats.reload(); }} />
+            <>
+              <RenewalTable renewals={renewals} onUpdated={() => { res.reload(); stats.reload(); }} />
+              <Pagination
+                page={page}
+                limit={PAGE_SIZE}
+                total={total}
+                onPageChange={(nextPage) => updateFilters({ page: String(nextPage) }, { preservePage: true })}
+              />
+            </>
           )}
         </div>
       </div>

@@ -113,6 +113,10 @@ tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--surface2); }
 tbody tr.clickable { cursor: pointer; }
 .mono { font-family: var(--mono); font-size: 12px; }
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-top: 1px solid var(--border); }
+.pagination-info { font-size: 12px; color: var(--text3); }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.pagination-page { font-size: 12px; color: var(--text2); min-width: 72px; text-align: center; }
 
 /* Badges */
 .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
@@ -585,6 +589,16 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
   table {
     min-width: 760px;
+  }
+
+  .pagination {
+    padding: 12px 14px;
+    align-items: stretch;
+  }
+
+  .pagination-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .login-page {

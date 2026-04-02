@@ -1,17 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getRenewalCustomerStats, getRenewals } from '../lib/api.js';
 import { useApi } from '../hooks/useApi.js';
-import { CUSTOMER_RESPONSE_OPTIONS, decorateRenewal } from '../lib/renewalUtils.js';
-import { ErrorMsg, Loading, StatCard } from '../components/UI.jsx';
+import { CUSTOMER_RESPONSE_OPTIONS } from '../lib/renewalUtils.js';
+import { ErrorMsg, Loading, StatCard, Pagination } from '../components/UI.jsx';
 import RenewalTable from '../components/RenewalTable.jsx';
+
+const PAGE_SIZE = 50;
 
 export default function RenewalCustomerTracking() {
   const [responseFilter, setResponseFilter] = useState('');
+  const [page, setPage] = useState(1);
   const stats = useApi(() => getRenewalCustomerStats());
-  const renewals = useApi(() => getRenewals({ limit: 1000 }));
+  const renewals = useApi(() => getRenewals({
+    ...(responseFilter ? { customer_response: responseFilter } : {}),
+    page,
+    limit: PAGE_SIZE,
+  }), [responseFilter, page]);
 
-  const rows = (renewals.data || []).map(decorateRenewal);
-  const filtered = responseFilter ? rows.filter((item) => item.customer_response === responseFilter) : rows;
+  useEffect(() => {
+    setPage(1);
+  }, [responseFilter]);
+
+  const rows = renewals.data || [];
+  const total = renewals.response?.total ?? rows.length;
   const counts = Object.fromEntries((stats.data || []).map((row) => [row.customer_response, row.total]));
 
   return (
@@ -25,14 +36,20 @@ export default function RenewalCustomerTracking() {
 
       <div className="stats-bar" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         {CUSTOMER_RESPONSE_OPTIONS.map((option) => (
-          <StatCard key={option} label={option} value={counts[option] ?? 0} variant={option === 'Renewed' ? 'green' : option === 'Rejected' ? 'red' : option === 'No Response' ? 'amber' : 'accent'} onClick={() => setResponseFilter(option)} />
+          <StatCard
+            key={option}
+            label={option}
+            value={counts[option] ?? 0}
+            variant={option === 'Renewed' ? 'green' : option === 'Rejected' ? 'red' : option === 'No Response' ? 'amber' : 'accent'}
+            onClick={() => setResponseFilter(option)}
+          />
         ))}
       </div>
 
       <div className="content">
         <div className="card">
           <div className="card-header">
-            <div className="card-title">{filtered.length} Renewal Records</div>
+            <div className="card-title">{total} Renewal Records</div>
             <div className="filter-bar">
               <select className="filter-select" value={responseFilter} onChange={(e) => setResponseFilter(e.target.value)}>
                 <option value="">All Responses</option>
@@ -43,7 +60,10 @@ export default function RenewalCustomerTracking() {
           {(stats.loading || renewals.loading) ? <Loading /> : (stats.error || renewals.error) ? (
             <ErrorMsg msg={stats.error || renewals.error} />
           ) : (
-            <RenewalTable renewals={filtered} onUpdated={() => { stats.reload(); renewals.reload(); }} />
+            <>
+              <RenewalTable renewals={rows} onUpdated={() => { stats.reload(); renewals.reload(); }} />
+              <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
+            </>
           )}
         </div>
       </div>

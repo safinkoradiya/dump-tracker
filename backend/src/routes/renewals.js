@@ -9,6 +9,56 @@ import { applyAssignedRmScope, scopedRmExpression } from '../lib/access.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 200;
+
+const DAYS_TO_RENEWAL_SQL = `
+  CASE
+    WHEN r.policy_valid_till IS NULL THEN NULL
+    ELSE (r.policy_valid_till::date - CURRENT_DATE)
+  END
+`;
+
+const BUCKET_SQL = `
+  CASE
+    WHEN r.status = 'Renewed' THEN 'renewed'
+    WHEN r.policy_valid_till IS NULL THEN 'unknown'
+    WHEN r.policy_valid_till < CURRENT_DATE - 30 THEN 'expired_30_plus'
+    WHEN r.policy_valid_till < CURRENT_DATE - 15 THEN 'expired_16_30'
+    WHEN r.policy_valid_till < CURRENT_DATE THEN 'expired_1_15'
+    WHEN r.policy_valid_till = CURRENT_DATE THEN 'due_today'
+    WHEN r.policy_valid_till <= CURRENT_DATE + 7 THEN 'due_1_7'
+    WHEN r.policy_valid_till <= CURRENT_DATE + 15 THEN 'due_8_15'
+    WHEN r.policy_valid_till <= CURRENT_DATE + 30 THEN 'due_16_30'
+    ELSE 'due_31_plus'
+  END
+`;
+
+const CUSTOMER_RESPONSE_SQL = `COALESCE(NULLIF(r.customer_response, ''), 'No Response')`;
+const IS_DUE_SOON_SQL = `
+  CASE
+    WHEN r.status <> 'Renewed'
+      AND r.policy_valid_till IS NOT NULL
+      AND r.policy_valid_till >= CURRENT_DATE
+      AND r.policy_valid_till <= CURRENT_DATE + 30
+    THEN TRUE
+    ELSE FALSE
+  END
+`;
+const IS_EXPIRED_SQL = `
+  CASE
+    WHEN r.status <> 'Renewed'
+      AND r.policy_valid_till IS NOT NULL
+      AND r.policy_valid_till < CURRENT_DATE
+    THEN TRUE
+    ELSE FALSE
+  END
+`;
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 router.get('/', requireRenewalRmAccess, async (req, res) => {
   const {
@@ -18,9 +68,15 @@ router.get('/', requireRenewalRmAccess, async (req, res) => {
     insurer,
     customer_response,
     search,
-    limit = 1000,
+    bucket,
+    mode,
+    page = 1,
+    limit = DEFAULT_LIMIT,
   } = req.query;
 
+  const pageNum = parsePositiveInt(page, 1);
+  const limitNum = Math.min(parsePositiveInt(limit, DEFAULT_LIMIT), MAX_LIMIT);
+  const offset = (pageNum - 1) * limitNum;
   const params = [];
   const where = ['r.deleted_at IS NULL'];
 
@@ -42,7 +98,7 @@ router.get('/', requireRenewalRmAccess, async (req, res) => {
   }
   if (customer_response) {
     params.push(customer_response);
-    where.push(`r.customer_response = $${params.length}`);
+    where.push(`${CUSTOMER_RESPONSE_SQL} = $${params.length}`);
   }
   if (search) {
     params.push(`%${search}%`);
@@ -55,20 +111,76 @@ router.get('/', requireRenewalRmAccess, async (req, res) => {
       OR r.rm_name ILIKE $${idx}
     )`);
   }
+  if (bucket) {
+    params.push(bucket);
+    where.push(`${BUCKET_SQL} = $${params.length}`);
+  }
+  if (mode === 'dueSoon') {
+    where.push(`r.status <> 'Renewed'`);
+    where.push(`r.policy_valid_till IS NOT NULL`);
+    where.push(`r.policy_valid_till >= CURRENT_DATE`);
+    where.push(`r.policy_valid_till <= CURRENT_DATE + 30`);
+  }
+  if (mode === 'expired') {
+    where.push(`r.status <> 'Renewed'`);
+    where.push(`r.policy_valid_till IS NOT NULL`);
+    where.push(`r.policy_valid_till < CURRENT_DATE`);
+  }
   applyAssignedRmScope(req.user, params, where, scopedRmExpression('r'));
 
-  params.push(Number(limit));
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const result = await query(`
-    SELECT r.*, d.company AS dump_company
-    FROM renewals r
-    JOIN renewal_dumps d ON d.id = r.renewal_dump_id
-    ${whereSql}
-    ORDER BY r.policy_valid_till ASC NULLS LAST, r.created_at DESC
-    LIMIT $${params.length}
-  `, params);
+  const dataParams = [...params, limitNum, offset];
 
-  res.json({ data: result.rows.map(decorateRenewal) });
+  const [result, countRes, rmRes, insurerRes] = await Promise.all([
+    query(`
+      SELECT
+        r.*,
+        d.company AS dump_company,
+        ${CUSTOMER_RESPONSE_SQL} AS customer_response,
+        ${DAYS_TO_RENEWAL_SQL} AS days_to_renewal,
+        ${BUCKET_SQL} AS bucket,
+        ${IS_DUE_SOON_SQL} AS is_due_soon,
+        ${IS_EXPIRED_SQL} AS is_expired
+      FROM renewals r
+      JOIN renewal_dumps d ON d.id = r.renewal_dump_id
+      ${whereSql}
+      ORDER BY r.policy_valid_till ASC NULLS LAST, r.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `, dataParams),
+    query(`
+      SELECT COUNT(*)::int AS total
+      FROM renewals r
+      ${whereSql}
+    `, params),
+    query(`
+      SELECT DISTINCT r.rm_name
+      FROM renewals r
+      ${whereSql}
+        AND NULLIF(TRIM(r.rm_name), '') IS NOT NULL
+      ORDER BY r.rm_name ASC
+    `, params),
+    query(`
+      SELECT DISTINCT r.insurer
+      FROM renewals r
+      ${whereSql}
+        AND NULLIF(TRIM(r.insurer), '') IS NOT NULL
+      ORDER BY r.insurer ASC
+    `, params),
+  ]);
+
+  const total = countRes.rows[0]?.total || 0;
+
+  res.json({
+    data: result.rows.map(decorateRenewal),
+    total,
+    page: pageNum,
+    limit: limitNum,
+    totalPages: Math.max(1, Math.ceil(total / limitNum)),
+    meta: {
+      rms: rmRes.rows.map((row) => row.rm_name),
+      insurers: insurerRes.rows.map((row) => row.insurer),
+    },
+  });
 });
 
 router.get('/:id', requireRenewalRmAccess, async (req, res) => {

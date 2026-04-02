@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { deleteDump, getDump, getPolicies, importFile } from '../lib/api.js';
 import { fmtDate } from '../lib/utils.js';
 import { useApi } from '../hooks/useApi.js';
-import { StatCard, ProgressBar, Loading, ErrorMsg } from '../components/UI.jsx';
+import { StatCard, ProgressBar, Loading, ErrorMsg, Pagination } from '../components/UI.jsx';
 import PoliciesTable from '../components/PoliciesTable.jsx';
 import { useToast } from '../components/Toast.jsx';
-import NewDumpModal from '../components/NewDumpModal.jsx';
 import { canManageData } from '../lib/access.js';
+
+const PAGE_SIZE = 50;
 
 export default function DumpDetail() {
   const { id } = useParams();
@@ -15,21 +16,25 @@ export default function DumpDetail() {
   const toast = useToast();
   const [rmFilter, setRmFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const fileRef = { current: null };
+  const [page, setPage] = useState(1);
   const canEdit = canManageData();
 
-  const dump   = useApi(() => getDump(id), [id]);
-  const polsRes = useApi(() => getPolicies({ dump_id: id, limit: 500 }), [id]);
+  useEffect(() => {
+    setPage(1);
+  }, [id, rmFilter, statusFilter]);
 
-  const allPolicies = polsRes.data || [];
-  const rms = [...new Set(allPolicies.map(p => p.rm_name).filter(Boolean))].sort();
+  const dump = useApi(() => getDump(id), [id]);
+  const polsRes = useApi(() => getPolicies({
+    dump_id: id,
+    ...(rmFilter ? { rm_name: rmFilter } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    page,
+    limit: PAGE_SIZE,
+  }), [id, rmFilter, statusFilter, page]);
 
-  const filtered = allPolicies.filter(p => {
-    const matchRM = !rmFilter || p.rm_name === rmFilter;
-    const status = p.rm_resolved && p.company_resolved ? 'Resolved' : 'Pending';
-    const matchStatus = !statusFilter || status === statusFilter;
-    return matchRM && matchStatus;
-  });
+  const policies = polsRes.data || [];
+  const rms = polsRes.response?.meta?.rms || [];
+  const totalPoliciesInDump = polsRes.response?.total ?? policies.length;
 
   const handleFileImport = async (e) => {
     const file = e.target.files[0];
@@ -45,7 +50,11 @@ export default function DumpDetail() {
     e.target.value = '';
   };
 
-  const handleUpdated = () => { polsRes.reload(); dump.reload(); };
+  const handleUpdated = () => {
+    polsRes.reload();
+    dump.reload();
+  };
+
   const handleDeleteDump = async () => {
     if (!window.confirm(`Delete dump ${id}? All active and deleted policies under it will be removed.`)) return;
     try {
@@ -58,9 +67,9 @@ export default function DumpDetail() {
   };
 
   const d = dump.data;
-  const total    = d?.total_policies ?? allPolicies.length;
-  const resolved = d?.resolved_count ?? allPolicies.filter(p => p.rm_resolved && p.company_resolved).length;
-  const deleted  = d?.deleted_policies ?? 0;
+  const total = d?.total_policies ?? totalPoliciesInDump;
+  const resolved = d?.resolved_count ?? 0;
+  const deleted = d?.deleted_policies ?? 0;
 
   return (
     <>
@@ -88,13 +97,13 @@ export default function DumpDetail() {
       </div>
 
       <div className="stats-bar">
-        <StatCard label="Total Policies" value={total}        variant="accent" />
-        <StatCard label="Resolved"       value={resolved}     variant="green" />
-        <StatCard label="Pending"        value={total - resolved} variant="amber" />
+        <StatCard label="Total Policies" value={total} variant="accent" />
+        <StatCard label="Resolved" value={resolved} variant="green" />
+        <StatCard label="Pending" value={total - resolved} variant="amber" />
         <StatCard label="Deleted Policies" value={deleted} variant="red" />
         <div className="stat-card">
           <div className="stat-label">Progress</div>
-          <div className="stat-value" style={{ fontSize: 20 }}>{total > 0 ? Math.round(resolved/total*100) : 0}%</div>
+          <div className="stat-value" style={{ fontSize: 20 }}>{total > 0 ? Math.round(resolved / total * 100) : 0}%</div>
           <div style={{ marginTop: 6 }}><ProgressBar resolved={resolved} total={total} /></div>
         </div>
       </div>
@@ -102,13 +111,13 @@ export default function DumpDetail() {
       <div className="content">
         <div className="card">
           <div className="card-header">
-            <div className="card-title">Policies in {id}</div>
+            <div className="card-title">{totalPoliciesInDump} Policies in {id}</div>
             <div className="filter-bar">
-              <select className="filter-select" value={rmFilter} onChange={e => setRmFilter(e.target.value)}>
+              <select className="filter-select" value={rmFilter} onChange={(e) => setRmFilter(e.target.value)}>
                 <option value="">All RMs</option>
-                {rms.map(r => <option key={r}>{r}</option>)}
+                {rms.map((item) => <option key={item}>{item}</option>)}
               </select>
-              <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="">All Status</option>
                 <option>Pending</option>
                 <option>Resolved</option>
@@ -116,7 +125,10 @@ export default function DumpDetail() {
             </div>
           </div>
           {polsRes.loading ? <Loading /> : polsRes.error ? <ErrorMsg msg={polsRes.error} /> : (
-            <PoliciesTable policies={filtered} onUpdated={handleUpdated} />
+            <>
+              <PoliciesTable policies={policies} onUpdated={handleUpdated} />
+              <Pagination page={page} limit={PAGE_SIZE} total={totalPoliciesInDump} onPageChange={setPage} />
+            </>
           )}
         </div>
       </div>

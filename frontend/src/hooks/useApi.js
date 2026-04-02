@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 export function useApi(fetchFn, deps = []) {
   const [data, setData]       = useState(null);
+  const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
@@ -10,8 +11,10 @@ export function useApi(fetchFn, deps = []) {
     setError(null);
     try {
       const res = await fetchFn();
+      setResponse(res);
       setData(res.data ?? res);
     } catch (e) {
+      setResponse(null);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -21,5 +24,5 @@ export function useApi(fetchFn, deps = []) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { data, loading, error, reload: load };
+  return { data, response, loading, error, reload: load };
 }

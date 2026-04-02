@@ -1,20 +1,28 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { deleteRenewalDump, getRenewalDump, getRenewals, importRenewalFile } from '../lib/api.js';
-import { useApi } from '../hooks/useApi.js';
 import { fmtDate } from '../lib/utils.js';
-import { Loading, ErrorMsg, StatCard } from '../components/UI.jsx';
+import { useApi } from '../hooks/useApi.js';
+import { Loading, ErrorMsg, StatCard, Pagination } from '../components/UI.jsx';
 import { useToast } from '../components/Toast.jsx';
 import RenewalTable from '../components/RenewalTable.jsx';
 import { canManageData } from '../lib/access.js';
+
+const PAGE_SIZE = 50;
 
 export default function RenewalDumpDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
   const canEdit = canManageData();
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [id]);
 
   const dump = useApi(() => getRenewalDump(id), [id]);
-  const renewals = useApi(() => getRenewals({ renewal_dump_id: id, limit: 1000 }), [id]);
+  const renewals = useApi(() => getRenewals({ renewal_dump_id: id, page, limit: PAGE_SIZE }), [id, page]);
 
   const reload = () => {
     renewals.reload();
@@ -46,6 +54,7 @@ export default function RenewalDumpDetail() {
   };
 
   const d = dump.data;
+  const totalRenewals = renewals.response?.total ?? d?.total_renewals ?? 0;
 
   return (
     <>
@@ -81,10 +90,13 @@ export default function RenewalDumpDetail() {
       <div className="content">
         <div className="card">
           <div className="card-header">
-            <div className="card-title">Renewals in {id}</div>
+            <div className="card-title">{totalRenewals} Renewals in {id}</div>
           </div>
           {renewals.loading ? <Loading /> : renewals.error ? <ErrorMsg msg={renewals.error} /> : (
-            <RenewalTable renewals={renewals.data || []} onUpdated={reload} />
+            <>
+              <RenewalTable renewals={renewals.data || []} onUpdated={reload} />
+              <Pagination page={page} limit={PAGE_SIZE} total={totalRenewals} onPageChange={setPage} />
+            </>
           )}
         </div>
       </div>

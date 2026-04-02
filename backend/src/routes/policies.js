@@ -7,6 +7,37 @@ import { requireDataManage, requireDiscrepancyRmAccess } from "../middleware/aut
 import { applyAssignedRmScope, scopedRmExpression } from '../lib/access.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 200;
+
+const STATUS_SQL = `
+  CASE
+    WHEN p.rm_resolved AND p.company_resolved THEN 'Resolved'
+    ELSE 'Pending'
+  END
+`;
+
+const DAYS_PENDING_SQL = `
+  CASE
+    WHEN p.rm_resolved AND p.company_resolved THEN NULL
+    WHEN p.recv_date IS NULL THEN NULL
+    ELSE GREATEST((CURRENT_DATE - p.recv_date::date), 0)
+  END
+`;
+
+const BUCKET_SQL = `
+  CASE
+    WHEN ${DAYS_PENDING_SQL} IS NULL THEN 'resolved'
+    WHEN ${DAYS_PENDING_SQL} < 3 THEN 'hot'
+    WHEN ${DAYS_PENDING_SQL} <= 15 THEN 'warm'
+    ELSE 'cold'
+  END
+`;
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 // Days pending helper (computed in JS matching frontend logic)
 function daysPending(recvDate, rmResolved, companyResolved) {
@@ -31,12 +62,14 @@ router.get('/', requireDiscrepancyRmAccess, async (req, res) => {
   const {
     dump_id, rm_name, status, company,
     bucket, pending_side,
-    page = 1, limit = 100,
+    page = 1, limit = DEFAULT_LIMIT,
     search
   } = req.query;
 
+  const pageNum = parsePositiveInt(page, 1);
+  const limitNum = Math.min(parsePositiveInt(limit, DEFAULT_LIMIT), MAX_LIMIT);
   const params = [];
-  const where = [];
+  const where = [`p.deleted_at IS NULL`];
 
   if (dump_id)      { params.push(dump_id);      where.push(`p.dump_id = $${params.length}`); }
   if (rm_name)      { params.push(rm_name);       where.push(`p.rm_name = $${params.length}`); }
@@ -46,24 +79,29 @@ router.get('/', requireDiscrepancyRmAccess, async (req, res) => {
     params.push(`%${search}%`);
     where.push(`(p.policy_no ILIKE $${params.length} OR p.rm_name ILIKE $${params.length} OR p.imd_name ILIKE $${params.length})`);
   }
-  if (status === 'Resolved') where.push(`(p.rm_resolved AND p.company_resolved)`);
-  if (status === 'Pending')  where.push(`NOT (p.rm_resolved AND p.company_resolved)`);
-  where.push(`p.deleted_at IS NULL`);
+  if (status === 'Resolved') where.push(`${STATUS_SQL} = 'Resolved'`);
+  if (status === 'Pending')  where.push(`${STATUS_SQL} = 'Pending'`);
+  if (bucket)               { params.push(bucket); where.push(`${BUCKET_SQL} = $${params.length}`); }
   applyAssignedRmScope(req.user, params, where, scopedRmExpression('p'));
 
   const whereSQL = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
-  const offset = (Number(page) - 1) * Number(limit);
-  params.push(Number(limit), offset);
+  const offset = (pageNum - 1) * limitNum;
+  const dataParams = [...params, limitNum, offset];
 
   const sql = `
-    SELECT p.*, d.company,
-      p.rm_resolved AND p.company_resolved AS is_resolved
+    SELECT
+      p.*,
+      d.company,
+      p.rm_resolved AND p.company_resolved AS is_resolved,
+      ${DAYS_PENDING_SQL} AS days_pending,
+      ${BUCKET_SQL} AS bucket,
+      ${STATUS_SQL} AS status
     FROM policies p
     JOIN dumps d ON d.id = p.dump_id
     ${whereSQL}
     ORDER BY p.created_at DESC
-    LIMIT $${params.length - 1} OFFSET $${params.length}
+    LIMIT $${params.length + 1} OFFSET $${params.length + 2}
   `;
 
   const countSql = `
@@ -73,27 +111,38 @@ router.get('/', requireDiscrepancyRmAccess, async (req, res) => {
     ${whereSQL}
   `;
 
-  const [rows, countRes] = await Promise.all([
-    query(sql, params),
-    query(countSql, params.slice(0, -2))
+  const [rows, countRes, rmRes, companyRes] = await Promise.all([
+    query(sql, dataParams),
+    query(countSql, params),
+    query(`
+      SELECT DISTINCT p.rm_name
+      FROM policies p
+      JOIN dumps d ON d.id = p.dump_id
+      ${whereSQL}
+        AND NULLIF(TRIM(p.rm_name), '') IS NOT NULL
+      ORDER BY p.rm_name ASC
+    `, params),
+    query(`
+      SELECT DISTINCT d.company
+      FROM policies p
+      JOIN dumps d ON d.id = p.dump_id
+      ${whereSQL}
+        AND NULLIF(TRIM(d.company), '') IS NOT NULL
+      ORDER BY d.company ASC
+    `, params),
   ]);
-
-  // Attach computed fields
-  const data = rows.rows.map(p => ({
-    ...p,
-    days_pending: daysPending(p.recv_date, p.rm_resolved, p.company_resolved),
-    bucket: getBucket(daysPending(p.recv_date, p.rm_resolved, p.company_resolved)),
-    status: p.rm_resolved && p.company_resolved ? 'Resolved' : 'Pending',
-  }));
-
-  // Bucket filter applied after query (needs computed days_pending)
-  const filtered = bucket ? data.filter(p => p.bucket === bucket) : data;
+  const total = countRes.rows[0]?.total || 0;
 
   res.json({
-    data: filtered,
-    total: countRes.rows[0].total,
-    page: Number(page),
-    limit: Number(limit),
+    data: rows.rows,
+    total,
+    page: pageNum,
+    limit: limitNum,
+    totalPages: Math.max(1, Math.ceil(total / limitNum)),
+    meta: {
+      rms: rmRes.rows.map((row) => row.rm_name),
+      companies: companyRes.rows.map((row) => row.company),
+    },
   });
 });
 

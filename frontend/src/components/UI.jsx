@@ -62,3 +62,31 @@ export function EmptyState({ icon = '📋', text, hint }) {
     </div>
   );
 }
+
+export function Pagination({ page = 1, limit = 50, total = 0, onPageChange }) {
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  if (total <= limit) return null;
+
+  const from = total === 0 ? 0 : (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+
+  return (
+    <div className="pagination">
+      <div className="pagination-info">
+        Showing {from}-{to} of {total}
+      </div>
+      <div className="pagination-actions">
+        <button className="btn sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          Prev
+        </button>
+        <span className="pagination-page">
+          Page {page} / {totalPages}
+        </span>
+        <button className="btn sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
