@@ -5,6 +5,7 @@ import { query } from '../db/pool.js';
 import { nextPolicyId, ensureSequences } from '../db/sequences.js';
 import { requireDataManage, requireDiscrepancyRmAccess } from "../middleware/auth.js";
 import { applyAssignedRmScope, scopedRmExpression } from '../lib/access.js';
+import { recordAuditLog } from '../lib/audit.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const DEFAULT_LIMIT = 50;
@@ -194,6 +195,18 @@ router.post('/', requireDataManage, async (req, res) => {
       company_resolved || false, remarks || '', pending_side || '',
       JSON.stringify(extra || {})]);
 
+  await recordAuditLog({
+    req,
+    action: 'policy.create',
+    entityType: 'policy',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].policy_no,
+    details: {
+      summary: `Created policy ${result.rows[0].policy_no}`,
+      dump_id: result.rows[0].dump_id,
+      rm_name: result.rows[0].rm_name,
+    },
+  });
   res.status(201).json({ data: result.rows[0] });
 });
 
@@ -201,6 +214,8 @@ router.post('/', requireDataManage, async (req, res) => {
 router.patch('/:id', requireDataManage, async (req, res) => {
   const { rm_name, imd_name, given_date, recv_date, rm_response,
           rm_resolved, company_resolved, remarks, pending_side } = req.body;
+  const before = await query(`SELECT * FROM policies WHERE id = $1 AND deleted_at IS NULL`, [req.params.id]);
+  if (!before.rows.length) return res.status(404).json({ error: 'Policy not found' });
 
   const result = await query(`
     UPDATE policies SET
@@ -221,6 +236,31 @@ router.patch('/:id', requireDataManage, async (req, res) => {
 
   if (!result.rows.length) return res.status(404).json({ error: 'Policy not found' });
   const p = result.rows[0];
+  const changed = Object.keys({
+    rm_name,
+    imd_name,
+    given_date,
+    recv_date,
+    rm_response,
+    rm_resolved,
+    company_resolved,
+    remarks,
+    pending_side,
+  }).filter((key) => req.body[key] !== undefined);
+  await recordAuditLog({
+    req,
+    action: 'policy.update',
+    entityType: 'policy',
+    entityId: p.id,
+    entityLabel: p.policy_no,
+    details: {
+      summary: changed.length ? `Updated ${changed.join(', ')}` : `Updated policy ${p.policy_no}`,
+      changed_fields: changed,
+      dump_id: p.dump_id,
+      previous_status: before.rows[0].rm_resolved && before.rows[0].company_resolved ? 'Resolved' : 'Pending',
+      next_status: p.rm_resolved && p.company_resolved ? 'Resolved' : 'Pending',
+    },
+  });
   res.json({
     data: {
       ...p,
@@ -295,6 +335,18 @@ router.post("/import", requireDataManage, upload.single('file'), async (req, res
     inserted += insertRes.rowCount || 0;
   }
 
+  await recordAuditLog({
+    req,
+    action: 'policy.import',
+    entityType: 'dump',
+    entityId: dump_id,
+    entityLabel: dump_id,
+    details: {
+      summary: `Imported ${inserted} policies`,
+      count: inserted,
+      filename: req.file.originalname,
+    },
+  });
   res.status(201).json({ message: `Imported ${inserted} policies into ${dump_id}`, count: inserted });
 });
 
@@ -308,6 +360,17 @@ router.delete('/:id', requireDataManage, async (req, res) => {
   `, [req.params.id]);
 
   if (!result.rows.length) return res.status(404).json({ error: 'Policy not found' });
+  await recordAuditLog({
+    req,
+    action: 'policy.delete',
+    entityType: 'policy',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].policy_no,
+    details: {
+      summary: `Deleted policy ${result.rows[0].policy_no}`,
+      dump_id: result.rows[0].dump_id,
+    },
+  });
   res.json({ message: 'Policy deleted', data: result.rows[0] });
 });
 

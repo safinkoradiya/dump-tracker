@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { nextDumpId, ensureSequences } from '../db/sequences.js';
 import { requireDataManage, requireDiscrepancyView } from "../middleware/auth.js";
+import { recordAuditLog } from '../lib/audit.js';
 
 
 const router = Router();
@@ -74,12 +75,25 @@ router.post("/", requireDataManage, async (req, res) => {
      VALUES ($1, $2, $3, $4) RETURNING *`,
     [id, company, upload_date, remarks || '']
   );
+  await recordAuditLog({
+    req,
+    action: 'dump.create',
+    entityType: 'dump',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].company,
+    details: {
+      summary: `Created discrepancy dump for ${result.rows[0].company}`,
+      upload_date: result.rows[0].upload_date,
+    },
+  });
   res.status(201).json({ data: result.rows[0] });
 });
 
 // PATCH /api/dumps/:id — update dump details
 router.patch("/:id", requireDataManage, async (req, res) => {
   const { company, upload_date, remarks } = req.body;
+  const before = await query(`SELECT * FROM dumps WHERE id = $1`, [req.params.id]);
+  if (!before.rows.length) return res.status(404).json({ error: 'Dump not found' });
   const result = await query(`
     UPDATE dumps SET
       company     = COALESCE($1, company),
@@ -88,14 +102,37 @@ router.patch("/:id", requireDataManage, async (req, res) => {
     WHERE id = $4 RETURNING *
   `, [company, upload_date, remarks, req.params.id]);
 
-  if (!result.rows.length) return res.status(404).json({ error: 'Dump not found' });
+  const changed = Object.keys({ company, upload_date, remarks }).filter((key) => req.body[key] !== undefined);
+  await recordAuditLog({
+    req,
+    action: 'dump.update',
+    entityType: 'dump',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].company,
+    details: {
+      summary: changed.length ? `Updated ${changed.join(', ')}` : `Updated dump ${result.rows[0].id}`,
+      changed_fields: changed,
+      previous_company: before.rows[0].company,
+      next_company: result.rows[0].company,
+    },
+  });
   res.json({ data: result.rows[0] });
 });
 
 // DELETE /api/dumps/:id — cascades to policies
 router.delete("/:id", requireDataManage, async (req, res) => {
-  const result = await query('DELETE FROM dumps WHERE id=$1 RETURNING id', [req.params.id]);
+  const result = await query('DELETE FROM dumps WHERE id=$1 RETURNING id, company', [req.params.id]);
   if (!result.rows.length) return res.status(404).json({ error: 'Dump not found' });
+  await recordAuditLog({
+    req,
+    action: 'dump.delete',
+    entityType: 'dump',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].company,
+    details: {
+      summary: `Deleted discrepancy dump ${result.rows[0].id}`,
+    },
+  });
   res.json({ message: 'Deleted', id: req.params.id });
 });
 

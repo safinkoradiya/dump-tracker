@@ -9,6 +9,7 @@ import statsRouter   from './routes/stats.js';
 import renewalDumpsRouter from './routes/renewalDumps.js';
 import renewalsRouter from './routes/renewals.js';
 import renewalStatsRouter from './routes/renewalStats.js';
+import auditLogsRouter from './routes/auditLogs.js';
 import { errorHandler, notFound } from './middleware/errors.js';
 import exportRoutes from "./routes/export.js";
 import renewalExportRoutes from './routes/renewalExport.js';
@@ -44,6 +45,7 @@ app.use('/api/stats', authMiddleware, statsRouter);
 app.use('/api/renewal-dumps', authMiddleware, renewalDumpsRouter);
 app.use('/api/renewals', authMiddleware, renewalsRouter);
 app.use('/api/renewal-stats', authMiddleware, renewalStatsRouter);
+app.use('/api/audit-logs', authMiddleware, auditLogsRouter);
 
 // 404 + error handler (must be last)
 app.use(notFound);

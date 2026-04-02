@@ -3,6 +3,7 @@ import { query } from '../db/pool.js';
 import { nextRenewalDumpId, ensureSequences } from '../db/sequences.js';
 import { applyAssignedRmScope, hasAssignedRmScope, scopedRmExpression } from '../lib/access.js';
 import { requireDataManage, requireRenewalView } from '../middleware/auth.js';
+import { recordAuditLog } from '../lib/audit.js';
 
 const router = Router();
 
@@ -111,6 +112,17 @@ router.post('/', requireDataManage, async (req, res) => {
     RETURNING *
   `, [id, company, upload_date, remarks || '']);
 
+  await recordAuditLog({
+    req,
+    action: 'renewal_dump.create',
+    entityType: 'renewal_dump',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].company,
+    details: {
+      summary: `Created renewal dump for ${result.rows[0].company}`,
+      upload_date: result.rows[0].upload_date,
+    },
+  });
   res.status(201).json({ data: result.rows[0] });
 });
 
@@ -118,10 +130,20 @@ router.delete('/:id', requireDataManage, async (req, res) => {
   const result = await query(`
     DELETE FROM renewal_dumps
     WHERE id = $1
-    RETURNING id
+    RETURNING id, company
   `, [req.params.id]);
 
   if (!result.rows.length) return res.status(404).json({ error: 'Renewal dump not found' });
+  await recordAuditLog({
+    req,
+    action: 'renewal_dump.delete',
+    entityType: 'renewal_dump',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].company,
+    details: {
+      summary: `Deleted renewal dump ${result.rows[0].id}`,
+    },
+  });
   res.json({ message: 'Deleted', id: req.params.id });
 });
 

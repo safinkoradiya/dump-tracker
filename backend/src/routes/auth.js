@@ -9,7 +9,9 @@ import {
   normalizePermissions,
   normalizeRole,
   serializeUser,
+  summarizePermissions,
 } from "../lib/access.js";
+import { accessSummary, recordAuditLog } from "../lib/audit.js";
 
 const router = express.Router();
 
@@ -57,7 +59,22 @@ router.post("/register", authMiddleware, requireAdmin, async (req, res) => {
       [userId, username.trim(), hash, userRole, JSON.stringify(userPermissions), assignedRm]
     );
 
-    res.status(201).json({ data: serializeUser(result.rows[0]) });
+    const createdUser = serializeUser(result.rows[0]);
+    await recordAuditLog({
+      req,
+      action: 'user.create',
+      entityType: 'user',
+      entityId: createdUser.id,
+      entityLabel: createdUser.username,
+      details: {
+        summary: `Created user with ${accessSummary(createdUser)}`,
+        role: createdUser.role,
+        permissions: createdUser.permissions,
+        assigned_rm: createdUser.assigned_rm,
+      },
+    });
+
+    res.status(201).json({ data: createdUser });
   } catch (err) {
     console.error(err);
 
@@ -88,8 +105,14 @@ router.patch('/users/:id', authMiddleware, requireAdmin, async (req, res) => {
   if (!nextUsername) return res.status(400).json({ error: 'Username is required' });
 
   let nextPassword = current.password;
+  const changed = [];
+  if (current.username !== nextUsername) changed.push('username');
+  if (current.role !== nextRole) changed.push('role');
+  if (JSON.stringify(normalizePermissions(current.permissions)) !== JSON.stringify(nextPermissions)) changed.push('permissions');
+  if (normalizeAssignedRm(current.assigned_rm) !== nextAssignedRm) changed.push('assigned_rm');
   if (req.body.password) {
     nextPassword = await bcrypt.hash(req.body.password, 10);
+    changed.push('password');
   }
 
   try {
@@ -112,7 +135,26 @@ router.patch('/users/:id', authMiddleware, requireAdmin, async (req, res) => {
       ]
     );
 
-    res.json({ data: serializeUser(update.rows[0]) });
+    const updatedUser = serializeUser(update.rows[0]);
+    await recordAuditLog({
+      req,
+      action: 'user.update',
+      entityType: 'user',
+      entityId: updatedUser.id,
+      entityLabel: updatedUser.username,
+      details: {
+        summary: changed.length
+          ? `Updated ${changed.join(', ')}`
+          : `Saved user with ${accessSummary(updatedUser)}`,
+        changed_fields: changed,
+        previous_role: current.role,
+        next_role: updatedUser.role,
+        previous_access: summarizePermissions(current),
+        next_access: accessSummary(updatedUser),
+      },
+    });
+
+    res.json({ data: updatedUser });
   } catch (err) {
     console.error(err);
     if (err.code === '23505') {
@@ -127,14 +169,28 @@ router.delete('/users/:id', authMiddleware, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'You cannot delete your own account' });
   }
 
-  const targetRes = await query(`SELECT id, role FROM users WHERE id = $1`, [req.params.id]);
+  const targetRes = await query(`SELECT id, username, role, permissions, assigned_rm FROM users WHERE id = $1`, [req.params.id]);
   if (!targetRes.rows.length) return res.status(404).json({ error: 'User not found' });
 
   if (targetRes.rows[0].role === 'admin' && await adminCount() <= 1) {
     return res.status(400).json({ error: 'At least one admin must remain' });
   }
 
+  const targetUser = serializeUser(targetRes.rows[0]);
   await query(`DELETE FROM users WHERE id = $1`, [req.params.id]);
+  await recordAuditLog({
+    req,
+    action: 'user.delete',
+    entityType: 'user',
+    entityId: targetUser.id,
+    entityLabel: targetUser.username,
+    details: {
+      summary: `Deleted user with ${accessSummary(targetUser)}`,
+      role: targetUser.role,
+      permissions: targetUser.permissions,
+      assigned_rm: targetUser.assigned_rm,
+    },
+  });
   res.json({ message: 'User deleted', id: req.params.id });
 });
 
@@ -171,6 +227,19 @@ router.post("/login", async (req, res) => {
   );
 
   const safeUser = serializeUser(user);
+  await recordAuditLog({
+    req,
+    actor: safeUser,
+    action: 'auth.login',
+    entityType: 'session',
+    entityId: safeUser.id,
+    entityLabel: safeUser.username,
+    details: {
+      summary: 'Successful login',
+      role: safeUser.role,
+      access: accessSummary(safeUser),
+    },
+  });
   res.json({
     token,
     ...safeUser,

@@ -2,6 +2,7 @@ import express from "express";
 import ExcelJS from "exceljs";
 import pool from "../db/pool.js";
 import { authMiddleware, requireDataManage } from "../middleware/auth.js";
+import { recordAuditLog } from "../lib/audit.js";
 
 const router = express.Router();
 
@@ -75,6 +76,18 @@ router.post("/excel", authMiddleware, requireDataManage, async (req, res) => {
 
     await workbook.xlsx.write(res);
     res.end();
+    await recordAuditLog({
+      req,
+      action: 'policy.export',
+      entityType: 'policy',
+      entityLabel: 'discrepancy export',
+      details: {
+        summary: `Exported ${rows.length} policy rows`,
+        fields,
+        dump_ids: dumpIds,
+        row_count: rows.length,
+      },
+    });
 
   } catch (err) {
     console.error(err);

@@ -15,11 +15,28 @@ const migrate = async () => {
     assigned_rm TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
-`);
+	`);
   await query(`ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';`);
   await query(`UPDATE users SET role = 'user' WHERE role = 'viewer';`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '{}'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_rm TEXT DEFAULT '';`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id            TEXT PRIMARY KEY,
+      actor_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      actor_username TEXT NOT NULL,
+      actor_role    TEXT DEFAULT 'system',
+      action        TEXT NOT NULL,
+      entity_type   TEXT NOT NULL,
+      entity_id     TEXT DEFAULT '',
+      entity_label  TEXT DEFAULT '',
+      details       JSONB DEFAULT '{}'::jsonb,
+      ip_address    TEXT DEFAULT '',
+      user_agent    TEXT DEFAULT '',
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
 
   await query(`
     CREATE TABLE IF NOT EXISTS dumps (
@@ -135,6 +152,10 @@ const migrate = async () => {
   await query(`CREATE INDEX IF NOT EXISTS idx_renewals_status     ON renewals(status);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_renewals_valid_till ON renewals(policy_valid_till);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_renewals_deleted_at ON renewals(deleted_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_username ON audit_logs(actor_username);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_type ON audit_logs(entity_type);`);
   await query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_renewals_unique_active
     ON renewals(renewal_dump_id, dedupe_key)

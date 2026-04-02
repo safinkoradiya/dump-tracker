@@ -96,6 +96,7 @@ export const getUsers    = () => req('GET', '/auth/users');
 export const registerUser = (body) => req('POST', '/auth/register', body);
 export const updateUser  = (id, body) => req('PATCH', `/auth/users/${id}`, body);
 export const deleteUserAccount = (id) => req('DELETE', `/auth/users/${id}`);
+export const getAuditLogs = (params = {}) => req('GET', '/audit-logs?' + new URLSearchParams(params));
 export const exportExcel = (body) => reqBlob('POST', '/export/excel', body);
 
 // Stats

@@ -2,6 +2,7 @@ import express from 'express';
 import ExcelJS from 'exceljs';
 import pool from '../db/pool.js';
 import { requireDataManage } from '../middleware/auth.js';
+import { recordAuditLog } from '../lib/audit.js';
 
 const router = express.Router();
 
@@ -83,6 +84,18 @@ router.post('/excel', requireDataManage, async (req, res) => {
 
     await workbook.xlsx.write(res);
     res.end();
+    await recordAuditLog({
+      req,
+      action: 'renewal.export',
+      entityType: 'renewal',
+      entityLabel: 'renewal export',
+      details: {
+        summary: `Exported ${result.rows.length} renewal rows`,
+        fields,
+        dump_ids: dumpIds,
+        row_count: result.rows.length,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Renewal export failed' });

@@ -16,6 +16,7 @@ import RenewalRMTracking from './pages/RenewalRMTracking.jsx';
 import RenewalBucketOverview from './pages/RenewalBucketOverview.jsx';
 import RenewalCustomerTracking from './pages/RenewalCustomerTracking.jsx';
 import AccessControl from './pages/AccessControl.jsx';
+import AuditLog from './pages/AuditLog.jsx';
 import Login from './pages/Login.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import {
@@ -115,6 +116,14 @@ function Sidebar({ isOpen, onClose }) {
               <span className="nav-dot" />
               Users & Access
             </NavLink>
+            <NavLink
+              to="/audit-log"
+              onClick={onClose}
+              className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+            >
+              <span className="nav-dot" />
+              Audit Log
+            </NavLink>
           </>
         )}
       </nav>
@@ -207,6 +216,7 @@ function AppShell() {
             <Route path="/renewals/customers" element={<ProtectedRoute allow={canViewRenewalModule}><RenewalCustomerTracking /></ProtectedRoute>} />
 
             <Route path="/access" element={<ProtectedRoute allow={canManageUsers}><AccessControl /></ProtectedRoute>} />
+            <Route path="/audit-log" element={<ProtectedRoute allow={canManageUsers}><AuditLog /></ProtectedRoute>} />
             <Route path="/no-access" element={<ProtectedRoute><NoAccessPage /></ProtectedRoute>} />
           </Routes>
         </main>

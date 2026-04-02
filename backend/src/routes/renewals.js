@@ -6,6 +6,7 @@ import { ensureSequences } from '../db/sequences.js';
 import { decorateRenewal, parseRenewalWorkbook } from '../lib/renewals.js';
 import { requireDataManage, requireRenewalRmAccess } from '../middleware/auth.js';
 import { applyAssignedRmScope, scopedRmExpression } from '../lib/access.js';
+import { recordAuditLog } from '../lib/audit.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -212,6 +213,14 @@ router.patch('/:id', requireDataManage, async (req, res) => {
     remarks,
   } = req.body;
 
+  const before = await query(`
+    SELECT *
+    FROM renewals
+    WHERE id = $1
+      AND deleted_at IS NULL
+  `, [req.params.id]);
+  if (!before.rows.length) return res.status(404).json({ error: 'Renewal record not found' });
+
   const result = await query(`
     UPDATE renewals
     SET
@@ -243,7 +252,34 @@ router.patch('/:id', requireDataManage, async (req, res) => {
   ]);
 
   if (!result.rows.length) return res.status(404).json({ error: 'Renewal record not found' });
-  res.json({ data: decorateRenewal(result.rows[0]) });
+  const updated = decorateRenewal(result.rows[0]);
+  const changed = Object.keys({
+    rm_name,
+    status,
+    customer_response,
+    pending_with,
+    next_follow_up_date,
+    quoted_premium,
+    renewed_premium,
+    renewed_insurer,
+    renewed_on,
+    remarks,
+  }).filter((key) => req.body[key] !== undefined);
+  await recordAuditLog({
+    req,
+    action: 'renewal.update',
+    entityType: 'renewal',
+    entityId: updated.id,
+    entityLabel: updated.policy_number || updated.vehicle_number || updated.id,
+    details: {
+      summary: changed.length ? `Updated ${changed.join(', ')}` : `Updated renewal ${updated.id}`,
+      changed_fields: changed,
+      renewal_dump_id: updated.renewal_dump_id,
+      previous_status: before.rows[0].status,
+      next_status: updated.status,
+    },
+  });
+  res.json({ data: updated });
 });
 
 router.post('/import', requireDataManage, upload.single('file'), async (req, res) => {
@@ -347,6 +383,19 @@ router.post('/import', requireDataManage, upload.single('file'), async (req, res
     inserted += insertRes.rowCount || 0;
   }
 
+  await recordAuditLog({
+    req,
+    action: 'renewal.import',
+    entityType: 'renewal_dump',
+    entityId: renewal_dump_id,
+    entityLabel: renewal_dump_id,
+    details: {
+      summary: `Imported ${inserted} renewal records`,
+      count: inserted,
+      filename: req.file.originalname,
+      sheets_used: sheetsUsed,
+    },
+  });
   res.status(201).json({
     message: `Imported ${inserted} renewal records into ${renewal_dump_id}`,
     count: inserted,
@@ -364,6 +413,16 @@ router.delete('/:id', requireDataManage, async (req, res) => {
   `, [req.params.id]);
 
   if (!result.rows.length) return res.status(404).json({ error: 'Renewal record not found' });
+  await recordAuditLog({
+    req,
+    action: 'renewal.delete',
+    entityType: 'renewal',
+    entityId: result.rows[0].id,
+    entityLabel: result.rows[0].policy_number || result.rows[0].vehicle_number || result.rows[0].id,
+    details: {
+      summary: `Deleted renewal record ${result.rows[0].id}`,
+    },
+  });
   res.json({ message: 'Renewal record deleted', data: result.rows[0] });
 });
 
