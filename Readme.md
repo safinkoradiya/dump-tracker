@@ -1,151 +1,242 @@
-# Dump Policy Tracker — Full Stack
+# DumpTracker
 
-Insurance operations tool for tracking dump policy discrepancies.
+DumpTracker is an internal insurance operations platform built for **Sama Insurance Pvt. Ltd.** to manage:
+
+- discrepancy dump tracking
+- policy-level resolution workflows
+- renewal dump tracking
+- renewal follow-up and customer response workflows
+- RM tracking and bucket-based operations views
+- admin-led user access control
+- audit logging for key operational actions
+
+The project is split into:
+
+- `frontend/` — React + Vite application
+- `backend/` — Express + PostgreSQL API
+
+## What It Does
+
+### Discrepancy Module
+
+- Create and manage dump batches
+- Import policy files from Excel / CSV
+- Track policy resolution status
+- View pending and resolved policies
+- Monitor bucket aging
+- Track RM-wise workload
+
+### Renewal Module
+
+- Create and manage renewal dump batches
+- Import renewal workbooks from multiple sheets
+- Normalize varying renewal file structures
+- Track due soon, expired, and renewed policies
+- Manage renewal statuses and customer responses
+- View RM tracking, customer tracking, and renewal buckets
+
+### Access Control
+
+- Admin user management
+- Full-access and read-only user roles
+- Module-level access rights
+- RM-scoped user visibility
+
+### Audit & Governance
+
+- User creation, update, and deletion logs
+- Dump and renewal dump action logs
+- Policy and renewal update/delete/import logs
+- Export logs
+- Login event logging
+
+## Tech Stack
+
+- Frontend: React, React Router, Vite
+- Backend: Node.js, Express
+- Database: PostgreSQL
+- File handling: `xlsx`, `exceljs`, `multer`
+- Auth: JWT + role/permission checks
+- Deployment:
+  - Frontend: Vercel
+  - Backend: Render
+  - Database: Supabase Postgres
 
 ## Project Structure
 
-```
+```text
 dump-tracker/
-├── backend/          Node.js + Express API
-├── frontend/         React + Vite UI
-└── package.json      Root scripts (run both together)
+├── backend/
+│   ├── src/
+│   │   ├── config/
+│   │   ├── db/
+│   │   ├── lib/
+│   │   ├── middleware/
+│   │   └── routes/
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   └── pages/
+│   └── package.json
+└── package.json
 ```
 
----
+## Local Development
 
-## Local Development (First Time)
+### 1. Install dependencies
 
-### 1. Prerequisites
-- Node.js 18+
-- A PostgreSQL database (local or cloud)
-
-### 2. Install dependencies
 ```bash
 npm run install:all
 ```
 
-### 3. Set up backend environment
-```bash
-cp backend/.env.example backend/.env
-# Edit backend/.env and set your DATABASE_URL
+### 2. Configure environment variables
+
+Backend example is available in `backend/.env.example`.
+
+Recommended backend envs:
+
+```env
+DATABASE_URL=postgresql://...
+JWT_SECRET=your-strong-secret-at-least-32-chars
+FRONTEND_URL=http://localhost:5173
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-this-password
+ADMIN_ROLE=admin
 ```
 
-### 4. Run database migrations (creates tables)
+Frontend env:
+
+```env
+VITE_API_URL=http://localhost:3001
+```
+
+### 3. Run database migration
+
+From repo root:
+
 ```bash
 npm run db:migrate
 ```
 
-### 5. Start both servers
+Optional admin seed:
+
+```bash
+npm run db:seed --prefix backend
+```
+
+### 4. Start the app
+
 ```bash
 npm run dev
 ```
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
-- Health check: http://localhost:3001/health
+This runs:
 
----
+- backend on `http://localhost:3001`
+- frontend on `http://localhost:5173`
 
-## Deploy to Railway (Recommended — Free Tier Available)
+## Production Deployment
 
-### Step 1 — Push to GitHub
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/YOUR_USER/dump-tracker.git
-git push -u origin main
+### Frontend
+
+- Host: Vercel
+- Root Directory: `frontend`
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Environment Variable:
+
+```env
+VITE_API_URL=https://your-backend-url
 ```
 
-### Step 2 — Create PostgreSQL on Railway
-1. Go to https://railway.app and sign in
-2. New Project → Add a Service → Database → PostgreSQL
-3. Copy the `DATABASE_URL` from the Connect tab
+### Backend
 
-### Step 3 — Deploy Backend on Railway
-1. New Service → GitHub Repo → select your repo
-2. Set Root Directory: `backend`
-3. Add environment variables:
-   ```
-   DATABASE_URL    = <paste from step 2>
-   NODE_ENV        = production
-   FRONTEND_URL    = https://YOUR-FRONTEND.onrender.com   (add after frontend is deployed)
-   PORT            = 3001
-   ```
-4. Start command: `npm start`
-5. After first deploy, run migration once:
-   Railway → your backend service → Settings → Deploy → Add a one-off command:
-   `node src/db/migrate.js`
-
-### Step 4 — Deploy Frontend on Render (Free Static Site)
-1. Go to https://render.com → New → Static Site
-2. Connect your GitHub repo
-3. Settings:
-   - Root Directory: `frontend`
-   - Build Command: `npm install && npm run build`
-   - Publish Directory: `dist`
-4. Add environment variable:
-   ```
-   VITE_API_URL = https://YOUR-BACKEND.railway.app
-   ```
-5. Deploy
-
-### Step 5 — Connect them
-- Copy your frontend URL → go back to Railway backend → update `FRONTEND_URL`
-- Redeploy backend
-
----
-
-## Alternative: Deploy Both on Render
-
-### Backend (Web Service)
+- Host: Render
 - Root Directory: `backend`
-- Build Command: `npm install`
-- Start Command: `npm start`
-- Environment: same as Railway step 3
+- Build Command:
 
-### Database
-- Render → New → PostgreSQL (free tier available)
+```bash
+npm install
+```
 
-### Frontend (Static Site)
-- Same as step 4 above
+- Start Command:
 
----
+```bash
+npm start
+```
 
-## API Reference
+Backend environment variables:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /health | Health check |
-| GET | /api/dumps | List all dumps (with progress) |
-| POST | /api/dumps | Create a dump |
-| GET | /api/dumps/:id | Get single dump |
-| PATCH | /api/dumps/:id | Update dump |
-| DELETE | /api/dumps/:id | Delete dump (cascades) |
-| GET | /api/policies | List policies (filter: dump_id, rm_name, status, company, bucket, search) |
-| POST | /api/policies | Add single policy |
-| PATCH | /api/policies/:id | Update policy fields |
-| POST | /api/policies/import | Upload Excel/CSV (multipart: file + dump_id) |
-| GET | /api/stats | Dashboard counts |
-| GET | /api/stats/buckets | Aging bucket counts |
-| GET | /api/stats/rm | Per-RM breakdown |
+```env
+DATABASE_URL=postgresql://...
+JWT_SECRET=your-strong-secret-at-least-32-chars
+FRONTEND_URL=https://your-frontend-domain
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-this-password
+ADMIN_ROLE=admin
+```
 
----
+If a migration is required during deployment, temporarily use:
 
-## Excel Import Column Mapping
+```bash
+npm run db:migrate && npm start
+```
 
-The import endpoint auto-detects these column names from your insurer files:
+Then change it back to:
 
-| Your Column | Maps To |
-|-------------|---------|
-| `PolicyNo` or `Policy Number` | Policy number |
-| `LOGINID` or `RM Name` | RM name |
-| `INTERMEDIARYNAME` or `IMD Name` | IMD name |
-| `PolicyIssueDate` or `Dump Received Date` | Received date |
-| `QCRejectionRemarks` or `RM Response` | QC remarks |
-| `Ageing` or `Remarks` | Remarks |
-| `BRANCHNAME` | Branch (stored in extra) |
-| `Product_Name` | Product (stored in extra) |
-| `RegistrationNo` | Reg. number (stored in extra) |
-| `FinalPremium` | Premium (stored in extra) |
-| `CustomerFirstName` + `CustomerLastName` | Customer name (stored in extra) |
+```bash
+npm start
+```
+
+## Current Key Features
+
+- Discrepancy dump upload and tracking
+- Renewal dump upload and tracking
+- Flexible renewal sheet parsing
+- Policy and renewal delete handling
+- RM drill-down from RM tracking
+- Role-based and RM-scoped access control
+- Mobile-friendly layout
+- Server-side pagination for list-heavy pages
+- Admin audit log
+
+## Security Notes
+
+- `JWT_SECRET` is required and must be at least 32 characters
+- Admins should be created and managed carefully
+- Environment variables should never contain placeholder credentials in production
+- Database credentials should be rotated if ever exposed accidentally
+
+## Scripts
+
+Root:
+
+```bash
+npm run install:all
+npm run dev
+npm run db:migrate
+npm run build
+```
+
+Backend:
+
+```bash
+npm run dev --prefix backend
+npm start --prefix backend
+npm run db:migrate --prefix backend
+npm run db:seed --prefix backend
+```
+
+Frontend:
+
+```bash
+npm run dev --prefix frontend
+npm run build --prefix frontend
+```
+
+## Notes
+
+This system was designed and built while working at **Sama Insurance Pvt. Ltd.** as an internal operational product to improve visibility, accountability, and day-to-day execution for discrepancy and renewal handling.
